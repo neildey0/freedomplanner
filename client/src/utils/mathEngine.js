@@ -55,6 +55,13 @@ export function runSimulation(state) {
   const deferredCagr = getBucketCagr('deferred');
   const rothCagr = getBucketCagr('roth');
 
+  // Sum of all recurring expense base amounts (today's dollars).
+  // Used for freedom date check every year, independent of each expense's startYear.
+  // This answers: "when can I afford my full retirement lifestyle?" not "when do expenses begin?"
+  const baseRecurringTotal = expenses
+    .filter(e => e.type === 'recurring')
+    .reduce((s, e) => s + Number(e.amount || 0), 0);
+
   const results = [];
   let freedomDateFound = false;
 
@@ -137,12 +144,12 @@ export function runSimulation(state) {
     // Real (inflation-adjusted) net worth in today's dollars
     const realNetWorth = netWorth / inflationFactor;
 
-    // Freedom: post-tax SWR covers inflation-adjusted RECURRING expenses (or target income fallback)
-    const freedomTarget = yearRecurring > 0
-      ? yearRecurring
-      : (Number(targetRetirementIncome || 0) > 0
-        ? Number(targetRetirementIncome) * Math.pow(1 + inflation / 100, i)
-        : 0);
+    // Freedom target: total retirement lifestyle cost in today's dollars, inflation-adjusted.
+    // Uses all recurring expenses regardless of their startYear so freedom date is not
+    // artificially pinned to whenever expenses happen to begin in the timeline.
+    const fallbackTarget = Number(targetRetirementIncome || 0);
+    const freedomBaseAmount = baseRecurringTotal > 0 ? baseRecurringTotal : fallbackTarget;
+    const freedomTarget = freedomBaseAmount > 0 ? freedomBaseAmount * inflationFactor : 0;
     const isFreedom = freedomTarget > 0 && postTaxSwr4 >= freedomTarget && !freedomDateFound;
     if (isFreedom) freedomDateFound = true;
 
