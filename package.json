@@ -1,0 +1,16 @@
+{
+  "name": "freedom-planner",
+  "version": "1.0.0",
+  "description": "Local-First Financial Freedom Planner",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "concurrently \"node server.js\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix client",
+    "install:all": "npm install && npm install --prefix client"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "concurrently": "^8.2.2"
+  }
+}
