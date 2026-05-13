@@ -6,33 +6,37 @@ const PlanContext = createContext();
 
 const DEFAULT_STATE = {
   accounts: [
-    { id: 'a1', name: 'Brokerage Account', balance: 50000, cagr: 8, type: 'brokerage', asOfDate: '2026-01-01' },
-    { id: 'a2', name: '401(k)', balance: 150000, cagr: 7, type: 'deferred', asOfDate: '2026-01-01' },
-    { id: 'a3', name: 'Roth IRA', balance: 30000, cagr: 8, type: 'roth', asOfDate: '2026-01-01' },
+    { id: 'a1', name: 'Brokerage Account', balance: 50000,  cagr: 8, type: 'brokerage', asOfDate: '2026-01-01', owner: 'me' },
+    { id: 'a2', name: '401(k)',             balance: 150000, cagr: 7, type: 'deferred',  asOfDate: '2026-01-01', owner: 'me' },
+    { id: 'a3', name: 'Roth IRA',           balance: 30000,  cagr: 8, type: 'roth',      asOfDate: '2026-01-01', owner: 'me' },
   ],
   expenses: [
     { id: 'e1', name: 'Retirement Living', amount: 60000, startYear: 2045, type: 'recurring', endYear: '' },
-    { id: 'e2', name: 'New Car', amount: 35000, startYear: 2028, type: 'one-time' },
+    { id: 'e2', name: 'New Car',           amount: 35000, startYear: 2028, type: 'one-time' },
   ],
-  rsus: [],
+  rsus:       [],
+  properties: [],
   settings: {
-    inflation: 3,
-    globalCagrOverride: null,
-    crashYear: null,
-    crashPercent: 30,
-    projectionYears: 40,
-    currentYear: new Date().getFullYear(),
-    annualSavings: 30000,
-    savingsSplit: 60,
+    inflation:            3,
+    globalCagrOverride:   null,
+    crashYear:            null,
+    crashPercent:         30,
+    projectionYears:      40,
+    currentYear:          new Date().getFullYear(),
+    myAnnualSavings:      30000,
+    spouseAnnualSavings:  0,
+    savingsSplit:         60,
+    spouseSavingsSplit:   60,
     targetRetirementIncome: 0,
+    myName:     'Me',
+    spouseName: 'Spouse',
   },
-  darkMode: false,
+  darkMode:   false,
   simulation: [],
 };
 
 function recompute(state) {
-  const simulation = runSimulation(state);
-  return { ...state, simulation };
+  return { ...state, simulation: runSimulation(state) };
 }
 
 function reducer(state, action) {
@@ -45,10 +49,7 @@ function reducer(state, action) {
       next = recompute({ ...state, accounts: [...state.accounts, action.payload] });
       break;
     case 'UPDATE_ACCOUNT':
-      next = recompute({
-        ...state,
-        accounts: state.accounts.map(a => a.id === action.payload.id ? action.payload : a),
-      });
+      next = recompute({ ...state, accounts: state.accounts.map(a => a.id === action.payload.id ? action.payload : a) });
       break;
     case 'DELETE_ACCOUNT':
       next = recompute({ ...state, accounts: state.accounts.filter(a => a.id !== action.payload) });
@@ -57,10 +58,7 @@ function reducer(state, action) {
       next = recompute({ ...state, expenses: [...state.expenses, action.payload] });
       break;
     case 'UPDATE_EXPENSE':
-      next = recompute({
-        ...state,
-        expenses: state.expenses.map(e => e.id === action.payload.id ? action.payload : e),
-      });
+      next = recompute({ ...state, expenses: state.expenses.map(e => e.id === action.payload.id ? action.payload : e) });
       break;
     case 'DELETE_EXPENSE':
       next = recompute({ ...state, expenses: state.expenses.filter(e => e.id !== action.payload) });
@@ -69,13 +67,19 @@ function reducer(state, action) {
       next = recompute({ ...state, rsus: [...state.rsus, action.payload] });
       break;
     case 'UPDATE_RSU':
-      next = recompute({
-        ...state,
-        rsus: state.rsus.map(r => r.id === action.payload.id ? action.payload : r),
-      });
+      next = recompute({ ...state, rsus: state.rsus.map(r => r.id === action.payload.id ? action.payload : r) });
       break;
     case 'DELETE_RSU':
       next = recompute({ ...state, rsus: state.rsus.filter(r => r.id !== action.payload) });
+      break;
+    case 'ADD_PROPERTY':
+      next = recompute({ ...state, properties: [...(state.properties || []), action.payload] });
+      break;
+    case 'UPDATE_PROPERTY':
+      next = recompute({ ...state, properties: (state.properties || []).map(p => p.id === action.payload.id ? action.payload : p) });
+      break;
+    case 'DELETE_PROPERTY':
+      next = recompute({ ...state, properties: (state.properties || []).filter(p => p.id !== action.payload) });
       break;
     case 'UPDATE_SETTINGS':
       next = recompute({ ...state, settings: { ...state.settings, ...action.payload } });
@@ -84,12 +88,7 @@ function reducer(state, action) {
       next = { ...state, darkMode: !state.darkMode };
       break;
     case 'IMPORT':
-      next = recompute({
-        ...DEFAULT_STATE,
-        ...action.payload,
-        darkMode: state.darkMode,
-        simulation: [],
-      });
+      next = recompute({ ...DEFAULT_STATE, ...action.payload, darkMode: state.darkMode, simulation: [] });
       break;
     default:
       return state;
@@ -101,33 +100,33 @@ function reducer(state, action) {
 export function PlanProvider({ children }) {
   const saved = loadFromStorage();
   const [state, dispatch] = useReducer(reducer, null, () => {
-    if (saved) {
-      return recompute({ ...DEFAULT_STATE, ...saved, simulation: [] });
-    }
+    if (saved) return recompute({ ...DEFAULT_STATE, ...saved, simulation: [] });
     return recompute(DEFAULT_STATE);
   });
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (state.darkMode) root.classList.add('dark');
-    else root.classList.remove('dark');
+    document.documentElement.classList.toggle('dark', state.darkMode);
   }, [state.darkMode]);
 
-  const addAccount = useCallback(a => dispatch({ type: 'ADD_ACCOUNT', payload: a }), []);
+  const addAccount    = useCallback(a => dispatch({ type: 'ADD_ACCOUNT',    payload: a }), []);
   const updateAccount = useCallback(a => dispatch({ type: 'UPDATE_ACCOUNT', payload: a }), []);
   const deleteAccount = useCallback(id => dispatch({ type: 'DELETE_ACCOUNT', payload: id }), []);
 
-  const addExpense = useCallback(e => dispatch({ type: 'ADD_EXPENSE', payload: e }), []);
+  const addExpense    = useCallback(e => dispatch({ type: 'ADD_EXPENSE',    payload: e }), []);
   const updateExpense = useCallback(e => dispatch({ type: 'UPDATE_EXPENSE', payload: e }), []);
   const deleteExpense = useCallback(id => dispatch({ type: 'DELETE_EXPENSE', payload: id }), []);
 
-  const addRSU = useCallback(r => dispatch({ type: 'ADD_RSU', payload: r }), []);
+  const addRSU    = useCallback(r => dispatch({ type: 'ADD_RSU',    payload: r }), []);
   const updateRSU = useCallback(r => dispatch({ type: 'UPDATE_RSU', payload: r }), []);
   const deleteRSU = useCallback(id => dispatch({ type: 'DELETE_RSU', payload: id }), []);
 
+  const addProperty    = useCallback(p => dispatch({ type: 'ADD_PROPERTY',    payload: p }), []);
+  const updateProperty = useCallback(p => dispatch({ type: 'UPDATE_PROPERTY', payload: p }), []);
+  const deleteProperty = useCallback(id => dispatch({ type: 'DELETE_PROPERTY', payload: id }), []);
+
   const updateSettings = useCallback(s => dispatch({ type: 'UPDATE_SETTINGS', payload: s }), []);
-  const toggleDark = useCallback(() => dispatch({ type: 'TOGGLE_DARK' }), []);
-  const importData = useCallback(d => dispatch({ type: 'IMPORT', payload: d }), []);
+  const toggleDark     = useCallback(() => dispatch({ type: 'TOGGLE_DARK' }), []);
+  const importData     = useCallback(d => dispatch({ type: 'IMPORT', payload: d }), []);
 
   return (
     <PlanContext.Provider value={{
@@ -135,6 +134,7 @@ export function PlanProvider({ children }) {
       addAccount, updateAccount, deleteAccount,
       addExpense, updateExpense, deleteExpense,
       addRSU, updateRSU, deleteRSU,
+      addProperty, updateProperty, deleteProperty,
       updateSettings, toggleDark, importData,
     }}>
       {children}

@@ -5,14 +5,13 @@ import { fmtFull } from '../utils/mathEngine';
 
 const TYPE_META = {
   brokerage: { label: 'Brokerage (Taxable)', icon: TrendingUp, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20', tax: '15% cap gains on withdrawal' },
-  deferred: { label: 'Deferred (401k/IRA)', icon: Wallet, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20', tax: '20% income tax on withdrawal' },
-  roth: { label: 'Roth (Tax-Free)', icon: Shield, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20', tax: 'No tax on withdrawal' },
+  deferred:  { label: 'Deferred (401k/IRA)', icon: Wallet,     color: 'text-blue-600 dark:text-blue-400',   bg: 'bg-blue-50 dark:bg-blue-900/20',   tax: '20% income tax on withdrawal' },
+  roth:      { label: 'Roth (Tax-Free)',      icon: Shield,     color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20', tax: 'No tax on withdrawal' },
 };
 
-const EMPTY_FORM = { name: '', balance: '', cagr: 7, type: 'brokerage', asOfDate: new Date().toISOString().slice(0, 10) };
-
-function AccountForm({ initial = EMPTY_FORM, onSave, onCancel }) {
-  const [form, setForm] = useState(initial);
+function AccountForm({ initial, onSave, onCancel, myName, spouseName }) {
+  const EMPTY = { name: '', balance: '', cagr: 7, type: 'brokerage', asOfDate: new Date().toISOString().slice(0, 10), owner: 'me' };
+  const [form, setForm] = useState(initial || EMPTY);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   return (
@@ -39,21 +38,23 @@ function AccountForm({ initial = EMPTY_FORM, onSave, onCancel }) {
           </select>
         </div>
         <div>
+          <label className="label">Owner</label>
+          <select className="input" value={form.owner} onChange={e => set('owner', e.target.value)}>
+            <option value="me">{myName}</option>
+            <option value="spouse">{spouseName}</option>
+            <option value="joint">Joint (50/50)</option>
+          </select>
+        </div>
+        <div>
           <label className="label">Balance As Of Date</label>
           <input className="input" type="date" value={form.asOfDate} onChange={e => set('asOfDate', e.target.value)} />
         </div>
       </div>
       {form.type && (
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 italic">
-          {TYPE_META[form.type]?.tax}
-        </p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 italic">{TYPE_META[form.type]?.tax}</p>
       )}
       <div className="flex gap-2">
-        <button
-          onClick={() => { if (form.name && form.balance) onSave(form); }}
-          className="btn-primary text-sm"
-          disabled={!form.name || !form.balance}
-        >
+        <button onClick={() => { if (form.name && form.balance) onSave(form); }} className="btn-primary text-sm" disabled={!form.name || !form.balance}>
           <Check size={14} /> Save
         </button>
         <button onClick={onCancel} className="btn-secondary text-sm">
@@ -69,17 +70,21 @@ export default function AccountManager() {
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState(null);
 
+  const myName     = state.settings.myName     || 'Me';
+  const spouseName = state.settings.spouseName || 'Spouse';
+
   const handleAdd = (form) => {
     addAccount({ ...form, id: `a_${Date.now()}`, balance: Number(form.balance), cagr: Number(form.cagr) });
     setShowAdd(false);
   };
-
   const handleUpdate = (form) => {
     updateAccount({ ...form, balance: Number(form.balance), cagr: Number(form.cagr) });
     setEditId(null);
   };
 
   const totalNetWorth = state.accounts.reduce((s, a) => s + Number(a.balance || 0), 0);
+
+  const ownerLabel = (owner) => owner === 'joint' ? 'Joint' : owner === 'spouse' ? spouseName : myName;
 
   return (
     <div className="space-y-4 max-w-2xl">
@@ -96,10 +101,7 @@ export default function AccountManager() {
       </div>
 
       {showAdd && (
-        <AccountForm
-          onSave={handleAdd}
-          onCancel={() => setShowAdd(false)}
-        />
+        <AccountForm onSave={handleAdd} onCancel={() => setShowAdd(false)} myName={myName} spouseName={spouseName} />
       )}
 
       <div className="space-y-3">
@@ -115,6 +117,8 @@ export default function AccountManager() {
                 initial={{ ...account, balance: String(account.balance), cagr: String(account.cagr) }}
                 onSave={handleUpdate}
                 onCancel={() => setEditId(null)}
+                myName={myName}
+                spouseName={spouseName}
               />
             );
           }
@@ -126,7 +130,12 @@ export default function AccountManager() {
                   <Icon size={16} className={meta.color} />
                 </div>
                 <div className="min-w-0">
-                  <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{account.name}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{account.name}</p>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                      {ownerLabel(account.owner || 'me')}
+                    </span>
+                  </div>
                   <p className={`text-xs ${meta.color}`}>{meta.label}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{meta.tax}</p>
                 </div>
@@ -137,16 +146,10 @@ export default function AccountManager() {
                 <p className="text-xs text-green-600 dark:text-green-400">{account.cagr}% CAGR</p>
               </div>
               <div className="flex gap-1 flex-shrink-0">
-                <button
-                  onClick={() => { setEditId(account.id); setShowAdd(false); }}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors"
-                >
+                <button onClick={() => { setEditId(account.id); setShowAdd(false); }} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors">
                   <Pencil size={14} />
                 </button>
-                <button
-                  onClick={() => deleteAccount(account.id)}
-                  className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-colors"
-                >
+                <button onClick={() => deleteAccount(account.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-colors">
                   <Trash2 size={14} />
                 </button>
               </div>
