@@ -84,9 +84,12 @@ export function runSimulation(state) {
     savingsSplit        = 60,   // % going to deferred for Me
     spouseSavingsSplit  = 60,
     targetRetirementIncome = 0,
+    retirementYear   = null,    // user-planned stop-work year; null = auto (freedom date)
     myName     = 'Me',
     spouseName = 'Spouse',
   } = settings;
+
+  const retirementYearNum = retirementYear ? Number(retirementYear) : null;
 
   const mySavings = (myAnnualSavings !== undefined && myAnnualSavings !== null)
     ? Number(myAnnualSavings) : Number(annualSavings);
@@ -110,10 +113,13 @@ export function runSimulation(state) {
   for (let i = 0; i < projectionYears; i++) {
     const year          = currentYear + i;
     const inflationFactor = Math.pow(1 + inflation / 100, i);
-    // Post-freedom: employment income stops, recurring expenses drawn from corpus
-    const isPostFreedom = freedomDateFound;
+    // Post-retirement: employment income stops, recurring expenses drawn from corpus.
+    // If user set a retirement year, use that; otherwise auto-trigger at freedom date.
+    const isPostFreedom = retirementYearNum !== null
+      ? year > retirementYearNum
+      : freedomDateFound;
 
-    // ── 1. RSU vests (skipped post-freedom) ───────────────────────────────
+    // ── 1. RSU vests (skipped post-retirement) ────────────────────────────
     const yearRsus = rsus.filter(r => {
       try { return new Date(r.vestDate).getFullYear() === year; } catch { return false; }
     });
@@ -128,11 +134,14 @@ export function runSimulation(state) {
       addIncomeToOwner(accounts, balances, 'spouse', spouseRsuIncome);
     }
 
-    // ── 2. Annual savings (skipped post-freedom) ──────────────────────────
+    // ── 2. Annual savings (skipped post-retirement) ───────────────────────
     if (!isPostFreedom) {
       addSavingsToOwner(accounts, balances, 'me',     mySavings, savingsSplit);
       addSavingsToOwner(accounts, balances, 'spouse', spSavings, spouseSavingsSplit);
     }
+
+    // Total employment income this year (0 after retirement)
+    const yearlyIncome = isPostFreedom ? 0 : (meRsuIncome + spouseRsuIncome + mySavings + spSavings);
 
     // ── 3. Net rental income — passive, continues post-freedom ────────────
     let meRentalNet = 0, spouseRentalNet = 0;
@@ -304,6 +313,8 @@ export function runSimulation(state) {
       },
     };
 
+    const isRetirement = retirementYearNum !== null && year === retirementYearNum;
+
     results.push({
       year, yearIndex: i,
       // Me
@@ -317,7 +328,11 @@ export function runSimulation(state) {
       realNetWorth: realNW, swr4Percent: combSwr4, postTaxSwr4,
       freedomTarget, totalExpenses: yearExpenses,
       recurringExpenses: yearRecurring, oneTimeExpenses: yearOneTime,
-      isFreedom, inflationFactor, crashApplied,
+      // Income (goes to 0 after retirement/freedom)
+      yearlyIncome, meIncome: isPostFreedom ? 0 : meRsuIncome + mySavings,
+      spIncome: isPostFreedom ? 0 : spouseRsuIncome + spSavings,
+      isPostFreedom,
+      isFreedom, isRetirement, inflationFactor, crashApplied,
       formulaData,
       // Legacy keys (chart backward-compat)
       taxableBalance: me.taxable + sp.taxable,

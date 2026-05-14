@@ -53,6 +53,7 @@ const DEFAULT_STATE = {
     savingsSplit:           60,
     spouseSavingsSplit:     60,
     targetRetirementIncome: 0,
+    retirementYear:         null,
     myName:     'Neil',
     spouseName: 'Radhika',
   },

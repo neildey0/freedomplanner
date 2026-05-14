@@ -19,7 +19,7 @@ function ChartTooltip({ active, payload }) {
   const d = payload[0]?.payload;
   if (!d) return null;
   return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-3 text-xs max-w-[220px]">
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-3 text-xs max-w-[240px]">
       <p className="font-bold text-gray-900 dark:text-white mb-1.5">Year {d.year}</p>
       {payload.map(p => (
         <div key={p.dataKey} className="flex items-center justify-between gap-3 mb-0.5">
@@ -30,7 +30,20 @@ function ChartTooltip({ active, payload }) {
           <span className="font-mono font-semibold">{fmtFull(p.value)}</span>
         </div>
       ))}
+      {d.yearlyIncome > 0 && (
+        <div className="flex items-center justify-between gap-3 mb-0.5 border-t border-gray-100 dark:border-gray-800 pt-1 mt-1">
+          <span className="flex items-center gap-1 text-purple-500">
+            <span className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" />
+            Employment Income
+          </span>
+          <span className="font-mono font-semibold text-purple-600">{fmtFull(d.yearlyIncome)}</span>
+        </div>
+      )}
+      {d.isPostFreedom && d.yearlyIncome === 0 && (
+        <p className="text-purple-400 text-xs mt-1">Income: $0 (retired)</p>
+      )}
       {d.isFreedom && <p className="text-green-600 dark:text-green-400 font-semibold mt-1.5">🗽 Freedom Date!</p>}
+      {d.isRetirement && <p className="text-purple-600 dark:text-purple-400 font-semibold mt-1">🏖 Retirement Year</p>}
       {d.crashApplied && <p className="text-orange-500 font-semibold mt-1">⚠ Crash Applied</p>}
       <p className="text-gray-400 mt-1.5 italic">Click to see full breakdown ↓</p>
     </div>
@@ -111,19 +124,30 @@ export default function WealthChart() {
     onClick: handleChartClick,
     onMouseMove: handleChartMouseMove,
     style: { cursor: isDraggingCrash ? 'ew-resize' : 'pointer' },
-    margin: { top: 5, right: 10, bottom: 5, left: 10 },
+    margin: { top: 5, right: 65, bottom: 5, left: 10 },
   };
 
   const commonAxisProps = {
     xAxis: <XAxis dataKey="year" tick={{ fontSize: 11 }} />,
-    yAxis: <YAxis tickFormatter={fmtY} tick={{ fontSize: 11 }} width={62} />,
+    yAxisLeft:  <YAxis yAxisId="left"  tickFormatter={fmtY} tick={{ fontSize: 11 }} width={62} />,
+    yAxisRight: <YAxis yAxisId="right" orientation="right" tickFormatter={fmtY} tick={{ fontSize: 10 }} width={60} stroke="#a855f7" />,
   };
+
+  // Income line — shares the right axis across all views
+  const incomeLine = (
+    <Line yAxisId="right" type="monotone" dataKey="yearlyIncome"
+      name="Employment Income" stroke="#a855f7" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
+  );
 
   const refLines = (
     <>
       {freedomYear && (
         <ReferenceLine x={freedomYear} stroke="#22c55e" strokeWidth={2} strokeDasharray="5 3"
           label={{ value: '🗽 Freedom', position: 'insideTopRight', fontSize: 11, fill: '#22c55e' }} />
+      )}
+      {settings.retirementYear && (
+        <ReferenceLine x={Number(settings.retirementYear)} stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 3"
+          label={{ value: '🏖 Retire', position: 'insideTopLeft', fontSize: 11, fill: '#8b5cf6' }} />
       )}
       {settings.crashYear && (
         <ReferenceLine x={Number(settings.crashYear)} stroke="#f97316" strokeWidth={2} strokeDasharray="4 3"
@@ -159,64 +183,70 @@ export default function WealthChart() {
         {view === 'buckets' ? (
           <AreaChart {...commonChartProps}>
             <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.4} />
-            {commonAxisProps.xAxis}{commonAxisProps.yAxis}
+            {commonAxisProps.xAxis}{commonAxisProps.yAxisLeft}{commonAxisProps.yAxisRight}
             <Tooltip content={<ChartTooltip />} />
             <Legend />
-            <Area type="monotone" dataKey="rothBalance"     name="Roth (Tax-Free)"     stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.6} />
-            <Area type="monotone" dataKey="deferredBalance" name="Deferred (401k/IRA)" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
-            <Area type="monotone" dataKey="taxableBalance"  name="Brokerage (Taxable)" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.6} />
+            <Area yAxisId="left" type="monotone" dataKey="rothBalance"     name="Roth (Tax-Free)"     stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.6} />
+            <Area yAxisId="left" type="monotone" dataKey="deferredBalance" name="Deferred (401k/IRA)" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
+            <Area yAxisId="left" type="monotone" dataKey="taxableBalance"  name="Brokerage (Taxable)" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.6} />
+            {incomeLine}
             {refLines}
           </AreaChart>
         ) : view === 'freedom' ? (
           <LineChart {...commonChartProps}>
             <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.4} />
-            {commonAxisProps.xAxis}{commonAxisProps.yAxis}
+            {commonAxisProps.xAxis}{commonAxisProps.yAxisLeft}{commonAxisProps.yAxisRight}
             <Tooltip content={<ChartTooltip />} />
             <Legend />
-            <Line type="monotone" dataKey="postTaxSwr4"   name="4% SWR (post-tax)"          stroke="#22c55e" strokeWidth={2.5} dot={false} />
-            <Line type="monotone" dataKey="freedomTarget" name="Retirement Expenses Target"  stroke="#ef4444" strokeWidth={2.5} dot={false} strokeDasharray="5 3" />
+            <Line yAxisId="left" type="monotone" dataKey="postTaxSwr4"   name="4% SWR (post-tax)"         stroke="#22c55e" strokeWidth={2.5} dot={false} />
+            <Line yAxisId="left" type="monotone" dataKey="freedomTarget" name="Retirement Expenses Target" stroke="#ef4444" strokeWidth={2.5} dot={false} strokeDasharray="5 3" />
+            {incomeLine}
             {refLines}
           </LineChart>
         ) : view === 'me' ? (
           <LineChart {...commonChartProps}>
             <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.4} />
-            {commonAxisProps.xAxis}{commonAxisProps.yAxis}
+            {commonAxisProps.xAxis}{commonAxisProps.yAxisLeft}{commonAxisProps.yAxisRight}
             <Tooltip content={<ChartTooltip />} />
             <Legend />
-            <Line type="monotone" dataKey="meNetWorth"    name={`${myName} Net Worth`}   stroke="#3b82f6" strokeWidth={2.5} dot={false} />
-            <Line type="monotone" dataKey="meInvestments" name={`${myName} Investments`} stroke="#8b5cf6" strokeWidth={2}   dot={false} strokeDasharray="4 3" />
+            <Line yAxisId="left" type="monotone" dataKey="meNetWorth"    name={`${myName} Net Worth`}   stroke="#3b82f6" strokeWidth={2.5} dot={false} />
+            <Line yAxisId="left" type="monotone" dataKey="meInvestments" name={`${myName} Investments`} stroke="#8b5cf6" strokeWidth={2}   dot={false} strokeDasharray="4 3" />
+            {incomeLine}
             {refLines}
           </LineChart>
         ) : view === 'spouse' ? (
           <LineChart {...commonChartProps}>
             <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.4} />
-            {commonAxisProps.xAxis}{commonAxisProps.yAxis}
+            {commonAxisProps.xAxis}{commonAxisProps.yAxisLeft}{commonAxisProps.yAxisRight}
             <Tooltip content={<ChartTooltip />} />
             <Legend />
-            <Line type="monotone" dataKey="spouseNetWorth"    name={`${spouseName} Net Worth`}   stroke="#ec4899" strokeWidth={2.5} dot={false} />
-            <Line type="monotone" dataKey="spouseInvestments" name={`${spouseName} Investments`} stroke="#f97316" strokeWidth={2}   dot={false} strokeDasharray="4 3" />
+            <Line yAxisId="left" type="monotone" dataKey="spouseNetWorth"    name={`${spouseName} Net Worth`}   stroke="#ec4899" strokeWidth={2.5} dot={false} />
+            <Line yAxisId="left" type="monotone" dataKey="spouseInvestments" name={`${spouseName} Investments`} stroke="#f97316" strokeWidth={2}   dot={false} strokeDasharray="4 3" />
+            {incomeLine}
             {refLines}
           </LineChart>
         ) : view === 'combined' ? (
           <LineChart {...commonChartProps}>
             <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.4} />
-            {commonAxisProps.xAxis}{commonAxisProps.yAxis}
+            {commonAxisProps.xAxis}{commonAxisProps.yAxisLeft}{commonAxisProps.yAxisRight}
             <Tooltip content={<ChartTooltip />} />
             <Legend />
-            <Line type="monotone" dataKey="netWorth"     name="Combined Net Worth" stroke="#22c55e" strokeWidth={2.5} dot={false} />
-            <Line type="monotone" dataKey="realNetWorth" name="In Today's Dollars" stroke="#8b5cf6" strokeWidth={2}   dot={false} strokeDasharray="5 3" />
+            <Line yAxisId="left" type="monotone" dataKey="netWorth"     name="Combined Net Worth" stroke="#22c55e" strokeWidth={2.5} dot={false} />
+            <Line yAxisId="left" type="monotone" dataKey="realNetWorth" name="In Today's Dollars" stroke="#8b5cf6" strokeWidth={2}   dot={false} strokeDasharray="5 3" />
+            {incomeLine}
             {refLines}
           </LineChart>
         ) : (
-          /* 'all' view — combined + both separate */
+          /* 'all' view — combined + both separate + income */
           <LineChart {...commonChartProps}>
             <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.4} />
-            {commonAxisProps.xAxis}{commonAxisProps.yAxis}
+            {commonAxisProps.xAxis}{commonAxisProps.yAxisLeft}{commonAxisProps.yAxisRight}
             <Tooltip content={<ChartTooltip />} />
             <Legend />
-            <Line type="monotone" dataKey="netWorth"       name="Combined"        stroke="#22c55e" strokeWidth={3}   dot={false} />
-            <Line type="monotone" dataKey="meNetWorth"     name={myName}          stroke="#3b82f6" strokeWidth={2}   dot={false} strokeDasharray="5 3" />
-            <Line type="monotone" dataKey="spouseNetWorth" name={spouseName}      stroke="#ec4899" strokeWidth={2}   dot={false} strokeDasharray="5 3" />
+            <Line yAxisId="left" type="monotone" dataKey="netWorth"       name="Combined"        stroke="#22c55e" strokeWidth={3}   dot={false} />
+            <Line yAxisId="left" type="monotone" dataKey="meNetWorth"     name={myName}          stroke="#3b82f6" strokeWidth={2}   dot={false} strokeDasharray="5 3" />
+            <Line yAxisId="left" type="monotone" dataKey="spouseNetWorth" name={spouseName}      stroke="#ec4899" strokeWidth={2}   dot={false} strokeDasharray="5 3" />
+            {incomeLine}
             {refLines}
           </LineChart>
         )}
@@ -254,6 +284,7 @@ export default function WealthChart() {
                     <th className="px-3 py-2 text-right font-semibold text-pink-600 dark:text-pink-400">{spouseName} Property</th>
                   </>}
                   <th className="px-3 py-2 text-right font-semibold text-green-700 dark:text-green-400">Combined</th>
+                  <th className="px-3 py-2 text-right font-semibold text-purple-600 dark:text-purple-400">Income</th>
                   <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Expenses</th>
                   <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">4% SWR</th>
                   <th className="px-3 py-2 text-center font-semibold text-gray-600 dark:text-gray-400">Status</th>
@@ -281,14 +312,19 @@ export default function WealthChart() {
                         <td className="px-3 py-2 text-right text-pink-600 dark:text-pink-500">{d.spousePropertyValue > 0 ? fmtFull(d.spousePropertyValue) : '—'}</td>
                       </>}
                       <td className="px-3 py-2 text-right text-green-700 dark:text-green-400 font-medium">{fmtFull(d.netWorth)}</td>
+                      <td className={`px-3 py-2 text-right font-medium ${d.yearlyIncome > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400'}`}>
+                        {d.yearlyIncome > 0 ? fmtFull(d.yearlyIncome) : <span title="Retired — no employment income">$0</span>}
+                      </td>
                       <td className="px-3 py-2 text-right text-red-600 dark:text-red-400">{d.recurringExpenses > 0 ? fmtFull(d.recurringExpenses) : '—'}</td>
                       <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{fmtFull(d.postTaxSwr4)}</td>
                       <td className="px-3 py-2 text-center">
-                        {d.isFreedom
-                          ? <span className="text-green-600 dark:text-green-400 font-bold" title="Freedom Date">🗽</span>
-                          : d.postTaxSwr4 >= d.freedomTarget && d.freedomTarget > 0
-                            ? <span className="text-green-500" title="Already free">✓</span>
-                            : '—'
+                        {d.isRetirement
+                          ? <span className="text-purple-600 dark:text-purple-400 font-bold" title="Retirement Year">🏖</span>
+                          : d.isFreedom
+                            ? <span className="text-green-600 dark:text-green-400 font-bold" title="Freedom Date">🗽</span>
+                            : d.postTaxSwr4 >= d.freedomTarget && d.freedomTarget > 0
+                              ? <span className="text-green-500" title="Already free">✓</span>
+                              : '—'
                         }
                       </td>
                     </tr>

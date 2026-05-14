@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SlidersHorizontal, TrendingUp, Zap, AlertTriangle, PiggyBank, Target, Users, X } from 'lucide-react';
+import { SlidersHorizontal, TrendingUp, Zap, AlertTriangle, PiggyBank, Target, Users, X, Briefcase } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { findFreedomDate } from '../utils/mathEngine';
 
@@ -98,6 +98,39 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
             onChange={e => set('spouseSavingsSplit', Number(e.target.value))}
             className="w-full accent-pink-500" />
         </div>
+      </div>
+
+      {/* Planned Retirement Year */}
+      <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide">
+            <Briefcase size={13} /> Planned Retirement Year
+          </div>
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox"
+              checked={settings.retirementYear !== null && settings.retirementYear !== undefined}
+              onChange={e => set('retirementYear', e.target.checked ? settings.currentYear + 5 : null)}
+              className="rounded" />
+            <span className="text-xs text-gray-500">Set</span>
+          </label>
+        </div>
+        {settings.retirementYear !== null && settings.retirementYear !== undefined ? (
+          <>
+            <input type="number" className="input"
+              value={settings.retirementYear}
+              min={settings.currentYear}
+              max={settings.currentYear + settings.projectionYears}
+              onChange={e => set('retirementYear', Number(e.target.value))} />
+            <p className="text-xs text-gray-400 mt-1">
+              Income + savings continue through end of {settings.retirementYear}. After that, expenses drawn from corpus.
+              {freedomYear && Number(settings.retirementYear) > freedomYear && (
+                <span className="text-purple-500"> ({Number(settings.retirementYear) - freedomYear}yr past freedom date)</span>
+              )}
+            </p>
+          </>
+        ) : (
+          <p className="text-xs text-gray-400">Income stops automatically at freedom date ({freedomYear || '—'})</p>
+        )}
       </div>
 
       {/* Target Retirement Income */}
