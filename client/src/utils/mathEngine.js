@@ -110,25 +110,31 @@ export function runSimulation(state) {
   for (let i = 0; i < projectionYears; i++) {
     const year          = currentYear + i;
     const inflationFactor = Math.pow(1 + inflation / 100, i);
+    // Post-freedom: employment income stops, recurring expenses drawn from corpus
+    const isPostFreedom = freedomDateFound;
 
-    // ── 1. RSU vests ───────────────────────────────────────────────────────
+    // ── 1. RSU vests (skipped post-freedom) ───────────────────────────────
     const yearRsus = rsus.filter(r => {
       try { return new Date(r.vestDate).getFullYear() === year; } catch { return false; }
     });
     let meRsuIncome = 0, spouseRsuIncome = 0;
-    yearRsus.forEach(r => {
-      const val = Number(r.shares || 0) * Number(r.pricePerShare || 0);
-      if ((r.owner || 'me') === 'spouse') spouseRsuIncome += val;
-      else meRsuIncome += val;
-    });
-    addIncomeToOwner(accounts, balances, 'me', meRsuIncome);
-    addIncomeToOwner(accounts, balances, 'spouse', spouseRsuIncome);
+    if (!isPostFreedom) {
+      yearRsus.forEach(r => {
+        const val = Number(r.shares || 0) * Number(r.pricePerShare || 0);
+        if ((r.owner || 'me') === 'spouse') spouseRsuIncome += val;
+        else meRsuIncome += val;
+      });
+      addIncomeToOwner(accounts, balances, 'me', meRsuIncome);
+      addIncomeToOwner(accounts, balances, 'spouse', spouseRsuIncome);
+    }
 
-    // ── 2. Annual savings ──────────────────────────────────────────────────
-    addSavingsToOwner(accounts, balances, 'me',     mySavings, savingsSplit);
-    addSavingsToOwner(accounts, balances, 'spouse', spSavings, spouseSavingsSplit);
+    // ── 2. Annual savings (skipped post-freedom) ──────────────────────────
+    if (!isPostFreedom) {
+      addSavingsToOwner(accounts, balances, 'me',     mySavings, savingsSplit);
+      addSavingsToOwner(accounts, balances, 'spouse', spSavings, spouseSavingsSplit);
+    }
 
-    // ── 3. Net rental income (inflation-adjusted) ──────────────────────────
+    // ── 3. Net rental income — passive, continues post-freedom ────────────
     let meRentalNet = 0, spouseRentalNet = 0;
     properties.forEach(p => {
       const net   = (Number(p.annualRent || 0) - Number(p.annualExpenses || 0)) * inflationFactor;
@@ -154,6 +160,8 @@ export function runSimulation(state) {
       }
     });
     if (yearOneTime > 0) deductExpense(accounts, balances, yearOneTime);
+    // Post-freedom: draw living expenses directly from corpus
+    if (isPostFreedom && yearRecurring > 0) deductExpense(accounts, balances, yearRecurring);
 
     // ── 5. Market crash (SORR) ─────────────────────────────────────────────
     let crashApplied = false;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ReferenceLine, ResponsiveContainer, AreaChart, Area,
@@ -38,20 +38,36 @@ function ChartTooltip({ active, payload }) {
 }
 
 const VIEWS = [
+  { id: 'all', label: 'All' },
   { id: 'combined', label: 'Combined' },
-  { id: 'side-by-side', label: 'Both' },
   { id: 'me', label: 'Me' },
   { id: 'spouse', label: 'Spouse' },
   { id: 'buckets', label: 'Tax Buckets' },
   { id: 'freedom', label: 'Freedom Track' },
 ];
 
+function DraggableCrashLabel({ viewBox, crashYear, onDragStart }) {
+  if (!viewBox) return null;
+  const { x, y, height } = viewBox;
+  return (
+    <g style={{ cursor: 'ew-resize', userSelect: 'none' }}
+      onMouseDown={e => { e.stopPropagation(); onDragStart(); }}>
+      <rect x={x - 12} y={y} width={24} height={height || 250}
+        fill="transparent" />
+      <text x={x + 5} y={y + 15} fill="#f97316" fontSize={11} fontWeight={600}>⚠ Crash</text>
+      <text x={x + 5} y={y + 27} fill="#f97316" fontSize={9} opacity={0.8}>{crashYear}</text>
+      <text x={x + 5} y={y + 38} fill="#f97316" fontSize={9} opacity={0.6}>↔ drag</text>
+    </g>
+  );
+}
+
 export default function WealthChart() {
-  const { state } = usePlan();
+  const { state, updateSettings } = usePlan();
   const { simulation, settings } = state;
-  const [view, setView] = useState('combined');
+  const [view, setView] = useState('all');
   const [selectedYear, setSelectedYear] = useState(null);
   const [showTable, setShowTable] = useState(false);
+  const [isDraggingCrash, setIsDraggingCrash] = useState(false);
 
   const myName     = settings.myName     || 'Me';
   const spouseName = settings.spouseName || 'Spouse';
@@ -59,7 +75,21 @@ export default function WealthChart() {
 
   const hasSpouseData = simulation.some(d => d.spouseNetWorth > 0);
 
+  useEffect(() => {
+    if (!isDraggingCrash) return;
+    const stop = () => setIsDraggingCrash(false);
+    window.addEventListener('mouseup', stop);
+    return () => window.removeEventListener('mouseup', stop);
+  }, [isDraggingCrash]);
+
+  const handleChartMouseMove = useCallback((chartData) => {
+    if (isDraggingCrash && chartData?.activeLabel) {
+      updateSettings({ crashYear: Number(chartData.activeLabel) });
+    }
+  }, [isDraggingCrash, updateSettings]);
+
   const handleChartClick = (chartData) => {
+    if (isDraggingCrash) return;
     if (chartData?.activePayload?.[0]) {
       const yr = chartData.activePayload[0].payload.year;
       setSelectedYear(prev => prev === yr ? null : yr);
@@ -79,7 +109,8 @@ export default function WealthChart() {
   const commonChartProps = {
     data: simulation,
     onClick: handleChartClick,
-    style: { cursor: 'pointer' },
+    onMouseMove: handleChartMouseMove,
+    style: { cursor: isDraggingCrash ? 'ew-resize' : 'pointer' },
     margin: { top: 5, right: 10, bottom: 5, left: 10 },
   };
 
@@ -95,8 +126,8 @@ export default function WealthChart() {
           label={{ value: '🗽 Freedom', position: 'insideTopRight', fontSize: 11, fill: '#22c55e' }} />
       )}
       {settings.crashYear && (
-        <ReferenceLine x={Number(settings.crashYear)} stroke="#f97316" strokeWidth={2} strokeDasharray="5 3"
-          label={{ value: '⚠ Crash', position: 'insideTopLeft', fontSize: 11, fill: '#f97316' }} />
+        <ReferenceLine x={Number(settings.crashYear)} stroke="#f97316" strokeWidth={2} strokeDasharray="4 3"
+          label={<DraggableCrashLabel crashYear={settings.crashYear} onDragStart={() => setIsDraggingCrash(true)} />} />
       )}
     </>
   );
@@ -118,6 +149,9 @@ export default function WealthChart() {
               {v.id === 'me' ? myName : v.id === 'spouse' ? spouseName : v.label}
             </button>
           ))}
+          {settings.crashYear && (
+            <span className="text-xs px-2 py-1.5 text-orange-500 italic">↔ drag crash line</span>
+          )}
         </div>
       </div>
 
@@ -139,8 +173,8 @@ export default function WealthChart() {
             {commonAxisProps.xAxis}{commonAxisProps.yAxis}
             <Tooltip content={<ChartTooltip />} />
             <Legend />
-            <Line type="monotone" dataKey="postTaxSwr4"  name="4% SWR (post-tax)"           stroke="#22c55e" strokeWidth={2.5} dot={false} />
-            <Line type="monotone" dataKey="freedomTarget" name="Retirement Expenses Target"   stroke="#ef4444" strokeWidth={2.5} dot={false} strokeDasharray="5 3" />
+            <Line type="monotone" dataKey="postTaxSwr4"   name="4% SWR (post-tax)"          stroke="#22c55e" strokeWidth={2.5} dot={false} />
+            <Line type="monotone" dataKey="freedomTarget" name="Retirement Expenses Target"  stroke="#ef4444" strokeWidth={2.5} dot={false} strokeDasharray="5 3" />
             {refLines}
           </LineChart>
         ) : view === 'me' ? (
@@ -149,8 +183,8 @@ export default function WealthChart() {
             {commonAxisProps.xAxis}{commonAxisProps.yAxis}
             <Tooltip content={<ChartTooltip />} />
             <Legend />
-            <Line type="monotone" dataKey="meNetWorth"    name={`${myName} Net Worth`}       stroke="#3b82f6" strokeWidth={2.5} dot={false} />
-            <Line type="monotone" dataKey="meInvestments" name={`${myName} Investments`}     stroke="#8b5cf6" strokeWidth={2}   dot={false} strokeDasharray="4 3" />
+            <Line type="monotone" dataKey="meNetWorth"    name={`${myName} Net Worth`}   stroke="#3b82f6" strokeWidth={2.5} dot={false} />
+            <Line type="monotone" dataKey="meInvestments" name={`${myName} Investments`} stroke="#8b5cf6" strokeWidth={2}   dot={false} strokeDasharray="4 3" />
             {refLines}
           </LineChart>
         ) : view === 'spouse' ? (
@@ -163,18 +197,7 @@ export default function WealthChart() {
             <Line type="monotone" dataKey="spouseInvestments" name={`${spouseName} Investments`} stroke="#f97316" strokeWidth={2}   dot={false} strokeDasharray="4 3" />
             {refLines}
           </LineChart>
-        ) : view === 'side-by-side' ? (
-          <LineChart {...commonChartProps}>
-            <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.4} />
-            {commonAxisProps.xAxis}{commonAxisProps.yAxis}
-            <Tooltip content={<ChartTooltip />} />
-            <Legend />
-            <Line type="monotone" dataKey="meNetWorth"     name={`${myName}`}     stroke="#3b82f6" strokeWidth={2.5} dot={false} />
-            <Line type="monotone" dataKey="spouseNetWorth" name={`${spouseName}`} stroke="#ec4899" strokeWidth={2.5} dot={false} />
-            <Line type="monotone" dataKey="netWorth"       name="Combined"        stroke="#22c55e" strokeWidth={2}   dot={false} strokeDasharray="4 3" />
-            {refLines}
-          </LineChart>
-        ) : (
+        ) : view === 'combined' ? (
           <LineChart {...commonChartProps}>
             <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.4} />
             {commonAxisProps.xAxis}{commonAxisProps.yAxis}
@@ -182,6 +205,18 @@ export default function WealthChart() {
             <Legend />
             <Line type="monotone" dataKey="netWorth"     name="Combined Net Worth" stroke="#22c55e" strokeWidth={2.5} dot={false} />
             <Line type="monotone" dataKey="realNetWorth" name="In Today's Dollars" stroke="#8b5cf6" strokeWidth={2}   dot={false} strokeDasharray="5 3" />
+            {refLines}
+          </LineChart>
+        ) : (
+          /* 'all' view — combined + both separate */
+          <LineChart {...commonChartProps}>
+            <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.4} />
+            {commonAxisProps.xAxis}{commonAxisProps.yAxis}
+            <Tooltip content={<ChartTooltip />} />
+            <Legend />
+            <Line type="monotone" dataKey="netWorth"       name="Combined"        stroke="#22c55e" strokeWidth={3}   dot={false} />
+            <Line type="monotone" dataKey="meNetWorth"     name={myName}          stroke="#3b82f6" strokeWidth={2}   dot={false} strokeDasharray="5 3" />
+            <Line type="monotone" dataKey="spouseNetWorth" name={spouseName}      stroke="#ec4899" strokeWidth={2}   dot={false} strokeDasharray="5 3" />
             {refLines}
           </LineChart>
         )}
