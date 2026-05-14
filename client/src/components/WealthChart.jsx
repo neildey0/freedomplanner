@@ -42,7 +42,7 @@ function ChartTooltip({ active, payload }) {
       {d.isPostFreedom && d.yearlyIncome === 0 && (
         <p className="text-purple-400 text-xs mt-1">Income: $0 (retired)</p>
       )}
-      {d.isFreedom && <p className="text-green-600 dark:text-green-400 font-semibold mt-1.5">🗽 Freedom Date!</p>}
+      {d.isFreedom && <p className="text-amber-400 font-semibold mt-1.5">💰 F.U. Date!</p>}
       {d.isRetirement && <p className="text-purple-600 dark:text-purple-400 font-semibold mt-1">🏖 Retirement Year</p>}
       {d.crashApplied && <p className="text-orange-500 font-semibold mt-1">⚠ Crash Applied</p>}
       <p className="text-gray-400 mt-1.5 italic">Click to see full breakdown ↓</p>
@@ -56,8 +56,19 @@ const VIEWS = [
   { id: 'me', label: 'Me' },
   { id: 'spouse', label: 'Spouse' },
   { id: 'buckets', label: 'Tax Buckets' },
-  { id: 'freedom', label: 'Freedom Track' },
+  { id: 'freedom', label: 'F.U. Track' },
 ];
+
+function YoyBadge({ current, prev }) {
+  if (prev == null || prev === 0 || current === prev) return null;
+  const pct = ((current - prev) / Math.abs(prev)) * 100;
+  const pos = pct >= 0;
+  return (
+    <span className={`text-[10px] ml-1 font-normal ${pos ? 'text-green-400' : 'text-red-400'}`}>
+      {pos ? '+' : ''}{pct.toFixed(1)}%
+    </span>
+  );
+}
 
 function DraggableCrashLabel({ viewBox, crashYear, onDragStart }) {
   if (!viewBox) return null;
@@ -142,8 +153,8 @@ export default function WealthChart() {
   const refLines = (
     <>
       {freedomYear && (
-        <ReferenceLine yAxisId="left" x={freedomYear} stroke="#22c55e" strokeWidth={2} strokeDasharray="5 3"
-          label={{ value: '🗽 Freedom', position: 'insideTopRight', fontSize: 11, fill: '#22c55e' }} />
+        <ReferenceLine yAxisId="left" x={freedomYear} stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3"
+          label={{ value: '💰 F.U.', position: 'insideTopRight', fontSize: 11, fill: '#f59e0b' }} />
       )}
       {settings.retirementYear && (
         <ReferenceLine yAxisId="left" x={Number(settings.retirementYear)} stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 3"
@@ -179,6 +190,7 @@ export default function WealthChart() {
         </div>
       </div>
 
+      <div data-pdf-chart>
       <ResponsiveContainer width="100%" height={300}>
         {view === 'buckets' ? (
           <AreaChart {...commonChartProps}>
@@ -251,6 +263,7 @@ export default function WealthChart() {
           </LineChart>
         )}
       </ResponsiveContainer>
+      </div>
 
       <p className="text-xs text-gray-400 text-center">
         👆 Click any point on the chart to see the complete math breakdown for that year
@@ -283,7 +296,7 @@ export default function WealthChart() {
                     <th className="px-3 py-2 text-right font-semibold text-pink-600 dark:text-pink-400">{spouseName} Investments</th>
                     <th className="px-3 py-2 text-right font-semibold text-pink-600 dark:text-pink-400">{spouseName} Property</th>
                   </>}
-                  <th className="px-3 py-2 text-right font-semibold text-green-700 dark:text-green-400">Combined</th>
+                  <th className="px-3 py-2 text-right font-semibold text-amber-400">Combined</th>
                   <th className="px-3 py-2 text-right font-semibold text-purple-600 dark:text-purple-400">Income</th>
                   <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Expenses</th>
                   <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">4% SWR</th>
@@ -291,37 +304,64 @@ export default function WealthChart() {
                 </tr>
               </thead>
               <tbody>
-                {simulation.map(d => {
+                {simulation.map((d, i) => {
+                  const prev = i > 0 ? simulation[i - 1] : null;
                   const isSelected = d.year === selectedYear;
                   return (
                     <tr
                       key={d.year}
-                      onClick={() => setSelectedYear(prev => prev === d.year ? null : d.year)}
-                      className={`border-b border-gray-100 dark:border-gray-800 cursor-pointer transition-colors
-                        ${isSelected ? 'bg-green-50 dark:bg-green-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}
+                      onClick={() => setSelectedYear(p => p === d.year ? null : d.year)}
+                      className={`border-b border-gray-800 cursor-pointer transition-colors
+                        ${isSelected ? 'bg-amber-500/10' : 'hover:bg-gray-800/50'}
                         ${d.isFreedom ? 'font-semibold' : ''}`}
                     >
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                      <td className="px-3 py-2 text-gray-300">
                         {d.year}
                         {d.crashApplied && <span className="ml-1 text-orange-500" title="Crash year">⚠</span>}
                       </td>
-                      <td className="px-3 py-2 text-right text-blue-700 dark:text-blue-400">{fmtFull(d.meInvestments)}</td>
-                      <td className="px-3 py-2 text-right text-blue-600 dark:text-blue-500">{d.mePropertyValue > 0 ? fmtFull(d.mePropertyValue) : '—'}</td>
-                      {hasSpouseData && <>
-                        <td className="px-3 py-2 text-right text-pink-700 dark:text-pink-400">{fmtFull(d.spouseInvestments)}</td>
-                        <td className="px-3 py-2 text-right text-pink-600 dark:text-pink-500">{d.spousePropertyValue > 0 ? fmtFull(d.spousePropertyValue) : '—'}</td>
-                      </>}
-                      <td className="px-3 py-2 text-right text-green-700 dark:text-green-400 font-medium">{fmtFull(d.netWorth)}</td>
-                      <td className={`px-3 py-2 text-right font-medium ${d.yearlyIncome > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400'}`}>
-                        {d.yearlyIncome > 0 ? fmtFull(d.yearlyIncome) : <span title="Retired — no employment income">$0</span>}
+                      <td className="px-3 py-2 text-right text-blue-400">
+                        {fmtFull(d.meInvestments)}
+                        <YoyBadge current={d.meInvestments} prev={prev?.meInvestments} />
                       </td>
-                      <td className="px-3 py-2 text-right text-red-600 dark:text-red-400">{d.recurringExpenses > 0 ? fmtFull(d.recurringExpenses) : '—'}</td>
-                      <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{fmtFull(d.postTaxSwr4)}</td>
+                      <td className="px-3 py-2 text-right text-blue-500">
+                        {d.mePropertyValue > 0 ? (
+                          <>{fmtFull(d.mePropertyValue)}<YoyBadge current={d.mePropertyValue} prev={prev?.mePropertyValue} /></>
+                        ) : '—'}
+                      </td>
+                      {hasSpouseData && <>
+                        <td className="px-3 py-2 text-right text-pink-400">
+                          {fmtFull(d.spouseInvestments)}
+                          <YoyBadge current={d.spouseInvestments} prev={prev?.spouseInvestments} />
+                        </td>
+                        <td className="px-3 py-2 text-right text-pink-500">
+                          {d.spousePropertyValue > 0 ? (
+                            <>{fmtFull(d.spousePropertyValue)}<YoyBadge current={d.spousePropertyValue} prev={prev?.spousePropertyValue} /></>
+                          ) : '—'}
+                        </td>
+                      </>}
+                      <td className="px-3 py-2 text-right text-amber-400 font-medium">
+                        {fmtFull(d.netWorth)}
+                        <YoyBadge current={d.netWorth} prev={prev?.netWorth} />
+                      </td>
+                      <td className={`px-3 py-2 text-right font-medium ${d.yearlyIncome > 0 ? 'text-purple-400' : 'text-gray-500'}`}>
+                        {d.yearlyIncome > 0 ? (
+                          <>{fmtFull(d.yearlyIncome)}<YoyBadge current={d.yearlyIncome} prev={prev?.yearlyIncome} /></>
+                        ) : <span title="Retired — no employment income">$0</span>}
+                      </td>
+                      <td className="px-3 py-2 text-right text-red-400">
+                        {d.recurringExpenses > 0 ? (
+                          <>{fmtFull(d.recurringExpenses)}<YoyBadge current={d.recurringExpenses} prev={prev?.recurringExpenses} /></>
+                        ) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right text-gray-300">
+                        {fmtFull(d.postTaxSwr4)}
+                        <YoyBadge current={d.postTaxSwr4} prev={prev?.postTaxSwr4} />
+                      </td>
                       <td className="px-3 py-2 text-center">
                         {d.isRetirement
-                          ? <span className="text-purple-600 dark:text-purple-400 font-bold" title="Retirement Year">🏖</span>
+                          ? <span className="text-purple-400 font-bold" title="Retirement Year">🏖</span>
                           : d.isFreedom
-                            ? <span className="text-green-600 dark:text-green-400 font-bold" title="Freedom Date">🗽</span>
+                            ? <span className="text-amber-400 font-bold" title="F.U. Date">💰</span>
                             : d.postTaxSwr4 >= d.freedomTarget && d.freedomTarget > 0
                               ? <span className="text-green-500" title="Already free">✓</span>
                               : '—'

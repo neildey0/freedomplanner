@@ -14,7 +14,7 @@ function MetricCard({ icon: Icon, label, value, sub, color = 'blue', highlight =
     emerald:'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20',
   };
   return (
-    <div className={`card flex items-start gap-3 ${highlight ? 'ring-2 ring-green-500 dark:ring-green-400' : ''}`}>
+    <div className={`card flex items-start gap-3 ${highlight ? 'ring-2 ring-amber-500' : ''}`}>
       <div className={`p-2.5 rounded-lg flex-shrink-0 ${colors[color]}`}>
         <Icon size={18} />
       </div>
@@ -111,32 +111,32 @@ export default function Dashboard() {
     <div className="space-y-6">
       {/* Freedom Date Hero */}
       {freedomYear ? (
-        <div className="bg-gradient-to-r from-green-600 to-emerald-500 rounded-2xl p-6 text-white shadow-lg">
+        <div className="bg-gradient-to-r from-amber-600 to-yellow-500 rounded-2xl p-6 text-gray-950 shadow-lg">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-green-100 text-sm font-medium mb-1">Your Freedom Date</p>
+              <p className="text-amber-900 text-sm font-medium mb-1">Your F.U. Date</p>
               <h2 className="text-5xl font-black">{freedomYear}</h2>
-              <p className="text-green-100 mt-2">
+              <p className="text-amber-900 mt-2">
                 {yearsToFreedom <= 0
-                  ? 'You have already achieved financial freedom!'
-                  : `${yearsToFreedom} year${yearsToFreedom === 1 ? '' : 's'} to financial freedom`}
+                  ? 'You already have F**K YOU Money!'
+                  : `${yearsToFreedom} year${yearsToFreedom === 1 ? '' : 's'} until you can say F**K YOU`}
               </p>
               {freedomData && (
-                <p className="text-green-200 text-sm mt-1">
-                  Combined net worth target: {fmtFull(freedomData.netWorth)} · 4% SWR: {fmtFull(freedomData.postTaxSwr4)}/yr
+                <p className="text-amber-800 text-sm mt-1">
+                  Net worth target: {fmtFull(freedomData.netWorth)} · 4% SWR: {fmtFull(freedomData.postTaxSwr4)}/yr
                 </p>
               )}
             </div>
-            <div className="text-7xl opacity-30">🗽</div>
+            <div className="text-7xl opacity-30">💰</div>
           </div>
         </div>
       ) : (
-        <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-6 text-white shadow-lg">
+        <div className="bg-gradient-to-r from-gray-800 to-gray-700 rounded-2xl p-6 text-white shadow-lg border border-amber-500/20">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-orange-100 text-sm font-medium mb-1">Freedom Date</p>
-              <h2 className="text-3xl font-black">Beyond Horizon</h2>
-              <p className="text-orange-100 mt-2">Add recurring expenses or a target retirement income to find your date</p>
+              <p className="text-gray-400 text-sm font-medium mb-1">F.U. Date</p>
+              <h2 className="text-3xl font-black text-amber-400">Beyond Horizon</h2>
+              <p className="text-gray-400 mt-2">Add recurring expenses or a target retirement income to find your date</p>
             </div>
             <div className="text-7xl opacity-30">📈</div>
           </div>
@@ -168,7 +168,7 @@ export default function Dashboard() {
 
       {/* Tax Bucket Analysis */}
       <div className="card">
-        <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-3 text-sm">Tax Bucket Analysis — {myName}{hasSpouseAssets ? ` + ${spouseName}` : ''}</h3>
+        <h3 className="font-semibold text-gray-200 mb-3 text-sm">Tax Bucket Analysis — {myName}{hasSpouseAssets ? ` + ${spouseName}` : ''}</h3>
         <div className="space-y-3">
           {[
             { label: 'Brokerage (Taxable)',  value: myTaxable + spTaxable,   pct: totalNetWorth > 0 ? (myTaxable + spTaxable) / totalNetWorth : 0,   color: 'bg-amber-400',  tax: '15% Cap Gains', taxAmt: (myTaxable + spTaxable) * 0.15 },

@@ -19,20 +19,20 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
         <SlidersHorizontal size={16} /> Simulation Controls
       </div>
 
-      {/* Freedom Date */}
+      {/* F.U. Date */}
       {freedomYear ? (
-        <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-center">
-          <div className="text-xs text-green-600 dark:text-green-400 font-medium mb-1">Freedom Date</div>
-          <div className="text-2xl font-bold text-green-700 dark:text-green-300">{freedomYear}</div>
-          <div className="text-xs text-green-600 dark:text-green-400">
-            {yearsToFreedom <= 0 ? 'You are FREE!' : `${yearsToFreedom} year${yearsToFreedom === 1 ? '' : 's'} away`}
+        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center">
+          <div className="text-xs text-amber-400 font-medium mb-1">💰 F.U. Date</div>
+          <div className="text-2xl font-bold text-amber-300">{freedomYear}</div>
+          <div className="text-xs text-amber-400">
+            {yearsToFreedom <= 0 ? 'You already have F**K YOU Money!' : `${yearsToFreedom} year${yearsToFreedom === 1 ? '' : 's'} away`}
           </div>
         </div>
       ) : (
-        <div className="p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl text-center">
-          <div className="text-xs text-orange-600 dark:text-orange-400 font-medium mb-1">Freedom Date</div>
-          <div className="text-lg font-bold text-orange-700 dark:text-orange-300">Not in range</div>
-          <div className="text-xs text-orange-600 dark:text-orange-400">Add recurring expenses or a target income</div>
+        <div className="p-3 bg-gray-800 border border-gray-700 rounded-xl text-center">
+          <div className="text-xs text-gray-400 font-medium mb-1">F.U. Date</div>
+          <div className="text-lg font-bold text-gray-300">Not in range</div>
+          <div className="text-xs text-gray-500">Add recurring expenses or a target income</div>
         </div>
       )}
 
