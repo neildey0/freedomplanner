@@ -61,6 +61,45 @@ const DEFAULT_STATE = {
   simulation: [],
 };
 
+const BLANK_STATE = {
+  accounts: [],
+  expenses: [],
+  rsus:       [],
+  properties: [],
+  settings: {
+    inflation:              3,
+    globalCagrOverride:     null,
+    crashes: [
+      { id: 'c1', year: 2031, percent: 30 },
+      { id: 'c2', year: 2036, percent: 30 },
+      { id: 'c3', year: 2041, percent: 30 },
+      { id: 'c4', year: 2046, percent: 30 },
+      { id: 'c5', year: 2051, percent: 30 },
+      { id: 'c6', year: 2056, percent: 30 },
+      { id: 'c7', year: 2061, percent: 30 },
+      { id: 'c8', year: 2066, percent: 30 },
+    ],
+    myAge:      30,
+    spouseAge:  30,
+    withdrawalRate: 4,
+    unexpectedExpenses: [],
+    projectionYears:      60,
+    currentYear:          new Date().getFullYear(),
+    myAnnualSavings:      0,
+    spouseAnnualSavings:  0,
+    savingsSplit:         60,
+    spouseSavingsSplit:   60,
+    targetRetirementIncome: 0,
+    myName:     'Me',
+    spouseName: 'Spouse',
+  },
+  darkMode:   false,
+  simulation: [],
+};
+
+const IS_PROD = import.meta.env.PROD;
+const INITIAL_BASE_STATE = IS_PROD ? BLANK_STATE : DEFAULT_STATE;
+
 function recompute(state) {
   return { ...state, simulation: runSimulation(state) };
 }
@@ -69,7 +108,7 @@ function reducer(state, action) {
   let next;
   switch (action.type) {
     case 'LOAD':
-      next = recompute({ ...DEFAULT_STATE, ...action.payload, simulation: [] });
+      next = recompute({ ...INITIAL_BASE_STATE, ...action.payload, simulation: [] });
       break;
     case 'ADD_ACCOUNT':
       next = recompute({ ...state, accounts: [...state.accounts, action.payload] });
@@ -114,7 +153,7 @@ function reducer(state, action) {
       next = { ...state, darkMode: !state.darkMode };
       break;
     case 'IMPORT':
-      next = recompute({ ...DEFAULT_STATE, ...action.payload, darkMode: state.darkMode, simulation: [] });
+      next = recompute({ ...INITIAL_BASE_STATE, ...action.payload, darkMode: state.darkMode, simulation: [] });
       break;
     default:
       return state;
@@ -126,8 +165,8 @@ function reducer(state, action) {
 export function PlanProvider({ children }) {
   const saved = loadFromStorage();
   const [state, dispatch] = useReducer(reducer, null, () => {
-    if (saved) return recompute({ ...DEFAULT_STATE, ...saved, simulation: [] });
-    return recompute(DEFAULT_STATE);
+    if (saved) return recompute({ ...INITIAL_BASE_STATE, ...saved, simulation: [] });
+    return recompute(INITIAL_BASE_STATE);
   });
 
   useEffect(() => {
