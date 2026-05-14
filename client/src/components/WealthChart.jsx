@@ -142,15 +142,15 @@ export default function WealthChart() {
   const refLines = (
     <>
       {freedomYear && (
-        <ReferenceLine x={freedomYear} stroke="#22c55e" strokeWidth={2} strokeDasharray="5 3"
+        <ReferenceLine yAxisId="left" x={freedomYear} stroke="#22c55e" strokeWidth={2} strokeDasharray="5 3"
           label={{ value: '🗽 Freedom', position: 'insideTopRight', fontSize: 11, fill: '#22c55e' }} />
       )}
       {settings.retirementYear && (
-        <ReferenceLine x={Number(settings.retirementYear)} stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 3"
+        <ReferenceLine yAxisId="left" x={Number(settings.retirementYear)} stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 3"
           label={{ value: '🏖 Retire', position: 'insideTopLeft', fontSize: 11, fill: '#8b5cf6' }} />
       )}
       {settings.crashYear && (
-        <ReferenceLine x={Number(settings.crashYear)} stroke="#f97316" strokeWidth={2} strokeDasharray="4 3"
+        <ReferenceLine yAxisId="left" x={Number(settings.crashYear)} stroke="#f97316" strokeWidth={2} strokeDasharray="4 3"
           label={<DraggableCrashLabel crashYear={settings.crashYear} onDragStart={() => setIsDraggingCrash(true)} />} />
       )}
     </>
