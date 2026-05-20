@@ -26,7 +26,6 @@ function addSavingsToOwner(accounts, balances, owner, totalSavings, deferredPct)
     const per = deferredAmt / deferredAccts.length;
     deferredAccts.forEach(a => { balances[a.id] = (balances[a.id] || 0) + per; });
   } else {
-    // No deferred: overflow into taxable
     if (taxableAccts.length > 0) {
       const per = deferredAmt / taxableAccts.length;
       taxableAccts.forEach(a => { balances[a.id] = (balances[a.id] || 0) + per; });
@@ -36,7 +35,6 @@ function addSavingsToOwner(accounts, balances, owner, totalSavings, deferredPct)
     const per = taxableAmt / taxableAccts.length;
     taxableAccts.forEach(a => { balances[a.id] = (balances[a.id] || 0) + per; });
   } else {
-    // No taxable: overflow into deferred
     if (deferredAccts.length > 0) {
       const per = taxableAmt / deferredAccts.length;
       deferredAccts.forEach(a => { balances[a.id] = (balances[a.id] || 0) + per; });
@@ -44,7 +42,6 @@ function addSavingsToOwner(accounts, balances, owner, totalSavings, deferredPct)
   }
 }
 
-// Add income to an owner's taxable (brokerage) accounts equally.
 function addIncomeToOwner(accounts, balances, owner, income) {
   if (!(income > 0)) return;
   const taxable = accounts.filter(a => a.type === 'brokerage' && (a.owner || 'me') === owner);
@@ -53,7 +50,6 @@ function addIncomeToOwner(accounts, balances, owner, income) {
   taxable.forEach(a => { balances[a.id] = (balances[a.id] || 0) + per; });
 }
 
-// Deduct a one-time expense from the combined portfolio: taxable → deferred → roth.
 function deductExpense(accounts, balances, amount) {
   if (!(amount > 0)) return;
   let remaining = amount;
@@ -74,76 +70,61 @@ export function runSimulation(state) {
   const {
     inflation        = 3,
     globalCagrOverride,
-    crashYear,
-    crashPercent     = 30,
-    projectionYears  = 40,
+    crashes          = [],
+    projectionYears  = 60,
     currentYear      = new Date().getFullYear(),
-    annualSavings    = 0,       // legacy field — used as myAnnualSavings if the new field absent
-    myAnnualSavings,
+    myAnnualSavings  = 0,
     spouseAnnualSavings = 0,
-    savingsSplit        = 60,   // % going to deferred for Me
+    savingsSplit        = 60,
     spouseSavingsSplit  = 60,
     targetRetirementIncome = 0,
-    retirementYear   = null,    // user-planned stop-work year; null = auto (freedom date)
-    myName     = 'Me',
-    spouseName = 'Spouse',
+    myName     = 'Neil',
+    spouseName = 'Radhika',
+    myAge      = 30,
+    spouseAge  = 30,
+    withdrawalRate = 4,
+    unexpectedExpenses = [],
   } = settings;
 
-  const retirementYearNum = retirementYear ? Number(retirementYear) : null;
+  const wRate = Number(withdrawalRate || 4) / 100;
+  const yearsTo120 = 120 - Math.min(Number(myAge), Number(spouseAge));
+  const simYears = Math.max(projectionYears, yearsTo120);
 
-  const mySavings = (myAnnualSavings !== undefined && myAnnualSavings !== null)
-    ? Number(myAnnualSavings) : Number(annualSavings);
-  const spSavings = Number(spouseAnnualSavings || 0);
-
-  // ── Per-account balance tracking ──────────────────────────────────────────
   const balances = {};
   accounts.forEach(a => { balances[a.id] = Math.max(0, Number(a.balance || 0)); });
-
   const propValues = {};
   properties.forEach(p => { propValues[p.id] = Math.max(0, Number(p.currentValue || 0)); });
 
-  // Base recurring total used for freedom-date check (all future recurring, today's $)
   const baseRecurringTotal = expenses
     .filter(e => e.type === 'recurring')
     .reduce((s, e) => s + Number(e.amount || 0), 0);
 
-  const results = [];
-  let freedomDateFound = false;
+  const rawResults = [];
 
-  for (let i = 0; i < projectionYears; i++) {
+  for (let i = 0; i < simYears; i++) {
     const year          = currentYear + i;
     const inflationFactor = Math.pow(1 + inflation / 100, i);
-    // Post-retirement: employment income stops, recurring expenses drawn from corpus.
-    // If user set a retirement year, use that; otherwise auto-trigger at freedom date.
-    const isPostFreedom = retirementYearNum !== null
-      ? year > retirementYearNum
-      : freedomDateFound;
+    const currMyAge     = Number(myAge) + i;
+    const currSpouseAge  = Number(spouseAge) + i;
 
-    // ── 1. RSU vests (skipped post-retirement) ────────────────────────────
+    // 1. RSU vests
     const yearRsus = rsus.filter(r => {
       try { return new Date(r.vestDate).getFullYear() === year; } catch { return false; }
     });
     let meRsuIncome = 0, spouseRsuIncome = 0;
-    if (!isPostFreedom) {
-      yearRsus.forEach(r => {
-        const val = Number(r.shares || 0) * Number(r.pricePerShare || 0);
-        if ((r.owner || 'me') === 'spouse') spouseRsuIncome += val;
-        else meRsuIncome += val;
-      });
-      addIncomeToOwner(accounts, balances, 'me', meRsuIncome);
-      addIncomeToOwner(accounts, balances, 'spouse', spouseRsuIncome);
-    }
+    yearRsus.forEach(r => {
+      const val = Number(r.shares || 0) * Number(r.pricePerShare || 0);
+      if ((r.owner || 'me') === 'spouse') spouseRsuIncome += val;
+      else meRsuIncome += val;
+    });
+    addIncomeToOwner(accounts, balances, 'me', meRsuIncome);
+    addIncomeToOwner(accounts, balances, 'spouse', spouseRsuIncome);
 
-    // ── 2. Annual savings (skipped post-retirement) ───────────────────────
-    if (!isPostFreedom) {
-      addSavingsToOwner(accounts, balances, 'me',     mySavings, savingsSplit);
-      addSavingsToOwner(accounts, balances, 'spouse', spSavings, spouseSavingsSplit);
-    }
+    // 2. Savings
+    addSavingsToOwner(accounts, balances, 'me',     myAnnualSavings, savingsSplit);
+    addSavingsToOwner(accounts, balances, 'spouse', spouseAnnualSavings, spouseSavingsSplit);
 
-    // Total employment income this year (0 after retirement)
-    const yearlyIncome = isPostFreedom ? 0 : (meRsuIncome + spouseRsuIncome + mySavings + spSavings);
-
-    // ── 3. Net rental income — passive, continues post-freedom ────────────
+    // 3. Rental Net
     let meRentalNet = 0, spouseRentalNet = 0;
     properties.forEach(p => {
       const net   = (Number(p.annualRent || 0) - Number(p.annualExpenses || 0)) * inflationFactor;
@@ -155,12 +136,12 @@ export function runSimulation(state) {
     addIncomeToOwner(accounts, balances, 'me',     meRentalNet);
     addIncomeToOwner(accounts, balances, 'spouse', spouseRentalNet);
 
-    // ── 4. Expenses ────────────────────────────────────────────────────────
-    let yearExpenses = 0, yearRecurring = 0, yearOneTime = 0;
+    // 4. Expenses
+    let yearExpenses = 0, yearRecurring = 0, yearOneTime = 0, yearUnexpected = 0;
     expenses.forEach(exp => {
       const baseAmount = Number(exp.amount || 0);
       const startYr    = Number(exp.startYear || currentYear);
-      const endYr      = exp.endYear ? Number(exp.endYear) : currentYear + projectionYears;
+      const endYr      = exp.endYear ? Number(exp.endYear) : currentYear + simYears;
       const inflated   = baseAmount * inflationFactor;
       if (exp.type === 'one-time' && year === startYr) {
         yearOneTime  += inflated; yearExpenses += inflated;
@@ -168,192 +149,97 @@ export function runSimulation(state) {
         yearRecurring += inflated; yearExpenses += inflated;
       }
     });
-    if (yearOneTime > 0) deductExpense(accounts, balances, yearOneTime);
-    // Post-freedom: draw living expenses directly from corpus
-    if (isPostFreedom && yearRecurring > 0) deductExpense(accounts, balances, yearRecurring);
+    unexpectedExpenses.forEach(ux => {
+      if (Number(ux.year) === year) {
+        const amt = Number(ux.amount || 0);
+        yearUnexpected += amt; yearExpenses += amt;
+      }
+    });
+    if (yearOneTime > 0 || yearUnexpected > 0) deductExpense(accounts, balances, yearOneTime + yearUnexpected);
 
-    // ── 5. Market crash (SORR) ─────────────────────────────────────────────
+    // 5. Crashes
     let crashApplied = false;
-    if (crashYear && year === Number(crashYear)) {
-      const f = 1 - Number(crashPercent) / 100;
-      Object.keys(balances).forEach(id  => { balances[id]   = Math.max(0, (balances[id]   || 0) * f); });
-      Object.keys(propValues).forEach(id => { propValues[id] = Math.max(0, (propValues[id] || 0) * f); });
+    let crashPercentApplied = 0;
+    const yearCrashes = (crashes || []).filter(c => Number(c.year) === year);
+    if (yearCrashes.length > 0) {
+      yearCrashes.forEach(c => {
+        const f = 1 - Number(c.percent || 30) / 100;
+        Object.keys(balances).forEach(id  => { balances[id]   = Math.max(0, (balances[id]   || 0) * f); });
+        Object.keys(propValues).forEach(id => { propValues[id] = Math.max(0, (propValues[id] || 0) * f); });
+        crashPercentApplied = c.percent;
+      });
       crashApplied = true;
     }
 
-    // ── 6. Snapshot ────────────────────────────────────────────────────────
-    const snapBal  = {};
-    accounts.forEach(a   => { snapBal[a.id]  = Math.max(0, balances[a.id]   || 0); });
-    const snapProp = {};
-    properties.forEach(p => { snapProp[p.id] = Math.max(0, propValues[p.id] || 0); });
-
-    // Aggregate by owner × type
-    const ob = {
-      me:     { taxable: 0, deferred: 0, roth: 0 },
-      spouse: { taxable: 0, deferred: 0, roth: 0 },
-      joint:  { taxable: 0, deferred: 0, roth: 0 },
-    };
+    // 6. Aggregate
+    const ob = { me: { taxable: 0, deferred: 0, roth: 0 }, spouse: { taxable: 0, deferred: 0, roth: 0 }, joint: { taxable: 0, deferred: 0, roth: 0 } };
     accounts.forEach(a => {
-      const owner   = a.owner || 'me';
+      const owner = a.owner || 'me';
       const typeKey = a.type === 'brokerage' ? 'taxable' : a.type === 'deferred' ? 'deferred' : 'roth';
-      ob[owner][typeKey] += snapBal[a.id];
+      ob[owner][typeKey] += (balances[a.id] || 0);
     });
-
-    // Joint accounts split 50/50
-    const me = {
-      taxable:  ob.me.taxable  + ob.joint.taxable  / 2,
-      deferred: ob.me.deferred + ob.joint.deferred / 2,
-      roth:     ob.me.roth     + ob.joint.roth     / 2,
-    };
-    const sp = {
-      taxable:  ob.spouse.taxable  + ob.joint.taxable  / 2,
-      deferred: ob.spouse.deferred + ob.joint.deferred / 2,
-      roth:     ob.spouse.roth     + ob.joint.roth     / 2,
-    };
-
-    // Property totals per person
+    const meData = { taxable: ob.me.taxable + ob.joint.taxable/2, deferred: ob.me.deferred + ob.joint.deferred/2, roth: ob.me.roth + ob.joint.roth/2 };
+    const spData = { taxable: ob.spouse.taxable + ob.joint.taxable/2, deferred: ob.spouse.deferred + ob.joint.deferred/2, roth: ob.spouse.roth + ob.joint.roth/2 };
     let mePropTotal = 0, spPropTotal = 0;
     properties.forEach(p => {
-      const val   = snapProp[p.id];
+      const val = propValues[p.id] || 0;
       const owner = p.owner || 'me';
-      if (owner === 'me')     mePropTotal += val;
+      if (owner === 'me') mePropTotal += val;
       else if (owner === 'spouse') spPropTotal += val;
-      else { mePropTotal += val / 2; spPropTotal += val / 2; }
+      else { mePropTotal += val/2; spPropTotal += val/2; }
     });
 
-    const meInv    = me.taxable + me.deferred + me.roth;
-    const spInv    = sp.taxable + sp.deferred + sp.roth;
-    const meNW     = meInv + mePropTotal;
-    const spNW     = spInv + spPropTotal;
-    const combNW   = meNW + spNW;
-
-    // Post-tax value: liquid investments only (real estate not included in SWR)
-    const mePostTax   = me.roth + me.taxable * 0.85 + me.deferred * 0.80;
-    const spPostTax   = sp.roth + sp.taxable * 0.85 + sp.deferred * 0.80;
+    const meInv = meData.taxable + meData.deferred + meData.roth;
+    const spInv = spData.taxable + spData.deferred + spData.roth;
+    const meNW = meInv + mePropTotal;
+    const spNW = spInv + spPropTotal;
+    const combNW = meNW + spNW;
+    const combLiquid = meInv + spInv;
+    const mePostTax = meData.roth + meData.taxable * 0.85 + meData.deferred * 0.80;
+    const spPostTax = spData.roth + spData.taxable * 0.85 + spData.deferred * 0.80;
     const combPostTax = mePostTax + spPostTax;
+    const postTaxWithdrawal = combPostTax * wRate;
 
-    const postTaxSwr4 = combPostTax * 0.04;
-    const combSwr4    = combNW * 0.04;
-    const realNW      = combNW / inflationFactor;
+    const prev = rawResults.length > 0 ? rawResults[rawResults.length - 1] : null;
+    const meChangePct = prev && prev.meNetWorth > 0 ? ((meNW - prev.meNetWorth) / prev.meNetWorth) * 100 : 0;
+    const spChangePct = prev && prev.spouseNetWorth > 0 ? ((spNW - prev.spouseNetWorth) / prev.spouseNetWorth) * 100 : 0;
+    const nwChangePct = prev && prev.netWorth > 0 ? ((combNW - prev.netWorth) / prev.netWorth) * 100 : 0;
 
-    // Freedom date: when post-tax 4% SWR covers total retirement lifestyle
-    const fallback      = Number(targetRetirementIncome || 0);
-    const freedomBase   = baseRecurringTotal > 0 ? baseRecurringTotal : fallback;
+    const freedomBase = baseRecurringTotal > 0 ? baseRecurringTotal : Number(targetRetirementIncome || 0);
     const freedomTarget = freedomBase > 0 ? freedomBase * inflationFactor : 0;
-    const isFreedom     = freedomTarget > 0 && postTaxSwr4 >= freedomTarget && !freedomDateFound;
-    if (isFreedom) freedomDateFound = true;
 
-    // ── Build per-person account detail for breakdown panel ──────────────
-    const buildPersonAccounts = (personOwner) =>
-      accounts
-        .filter(a => {
-          const o = a.owner || 'me';
-          return o === personOwner || o === 'joint';
-        })
-        .map(a => {
-          const o    = a.owner || 'me';
-          const frac = o === 'joint' ? 0.5 : 1;
-          const bal  = snapBal[a.id] * frac;
-          const afterTax =
-            a.type === 'brokerage' ? bal * 0.85 :
-            a.type === 'deferred'  ? bal * 0.80 : bal;
-          return {
-            id: a.id, name: a.name + (o === 'joint' ? ' (Joint — your 50%)' : ''),
-            type: a.type, balance: bal, afterTax,
-            taxRate: a.type === 'brokerage' ? 15 : a.type === 'deferred' ? 20 : 0,
-            cagr: a.cagr,
-          };
-        });
-
-    const buildPersonProps = (personOwner) =>
-      properties
-        .filter(p => {
-          const o = p.owner || 'me';
-          return o === personOwner || o === 'joint';
-        })
-        .map(p => {
-          const o    = p.owner || 'me';
-          const frac = o === 'joint' ? 0.5 : 1;
-          const val  = snapProp[p.id] * frac;
-          return {
-            id: p.id, name: p.name + (o === 'joint' ? ' (Joint — your 50%)' : ''),
-            value: val, appreciationRate: p.appreciationRate,
-            annualRent:     Number(p.annualRent     || 0) * inflationFactor * frac,
-            annualExpenses: Number(p.annualExpenses || 0) * inflationFactor * frac,
-            netRentalAnnual:(Number(p.annualRent || 0) - Number(p.annualExpenses || 0)) * inflationFactor * frac,
-          };
-        });
-
-    const formulaData = {
-      year, inflationFactor, inflation, crashApplied, crashPercent, isFreedom,
-      me: {
-        name: myName,
-        accounts:    buildPersonAccounts('me'),
-        properties:  buildPersonProps('me'),
-        taxable: me.taxable, deferred: me.deferred, roth: me.roth,
-        propertyTotal: mePropTotal, investments: meInv,
-        netWorth: meNW, postTax: mePostTax, swr4: mePostTax * 0.04,
-        rsuIncome: meRsuIncome, savings: mySavings, savingsSplit,
-        rentalNet: meRentalNet,
-      },
-      spouse: {
-        name: spouseName,
-        accounts:    buildPersonAccounts('spouse'),
-        properties:  buildPersonProps('spouse'),
-        taxable: sp.taxable, deferred: sp.deferred, roth: sp.roth,
-        propertyTotal: spPropTotal, investments: spInv,
-        netWorth: spNW, postTax: spPostTax, swr4: spPostTax * 0.04,
-        rsuIncome: spouseRsuIncome, savings: spSavings, savingsSplit: spouseSavingsSplit,
-        rentalNet: spouseRentalNet,
-      },
-      combined: {
-        netWorth: combNW, postTax: combPostTax,
-        swr4: postTaxSwr4, freedomTarget,
-        yearExpenses, yearRecurring, yearOneTime,
-      },
-    };
-
-    const isRetirement = retirementYearNum !== null && year === retirementYearNum;
-
-    results.push({
-      year, yearIndex: i,
-      // Me
-      meTaxable: me.taxable, meDeferred: me.deferred, meRoth: me.roth,
-      mePropertyValue: mePropTotal, meNetWorth: meNW, mePostTax, meInvestments: meInv,
-      // Spouse
-      spouseTaxable: sp.taxable, spouseDeferred: sp.deferred, spouseRoth: sp.roth,
-      spousePropertyValue: spPropTotal, spouseNetWorth: spNW, spousePostTax: spPostTax, spouseInvestments: spInv,
-      // Combined
-      netWorth: combNW, postTaxNetWorth: combPostTax,
-      realNetWorth: realNW, swr4Percent: combSwr4, postTaxSwr4,
-      freedomTarget, totalExpenses: yearExpenses,
-      recurringExpenses: yearRecurring, oneTimeExpenses: yearOneTime,
-      // Income (goes to 0 after retirement/freedom)
-      yearlyIncome, meIncome: isPostFreedom ? 0 : meRsuIncome + mySavings,
-      spIncome: isPostFreedom ? 0 : spouseRsuIncome + spSavings,
-      isPostFreedom,
-      isFreedom, isRetirement, inflationFactor, crashApplied,
-      formulaData,
-      // Legacy keys (chart backward-compat)
-      taxableBalance: me.taxable + sp.taxable,
-      deferredBalance: me.deferred + sp.deferred,
-      rothBalance: me.roth + sp.roth,
+    rawResults.push({
+      year, myAge: currMyAge, spouseAge: currSpouseAge,
+      meNetWorth: meNW, meChangePct, spouseNetWorth: spNW, spChangePct,
+      netWorth: combNW, liquidAssets: combLiquid, postTaxWithdrawal, freedomTarget,
+      totalExpenses: yearExpenses, nwChangePct, crashApplied, crashPercent: crashPercentApplied,
+      taxableBalance: meData.taxable + spData.taxable, deferredBalance: meData.deferred + spData.deferred, rothBalance: meData.roth + spData.roth,
+      realNetWorth: combNW / inflationFactor,
     });
 
-    // ── 7. Apply CAGR / appreciation for next iteration ───────────────────
+    // 7. Apply CAGR for next year
     accounts.forEach(a => {
-      const cagr = (globalCagrOverride !== null && globalCagrOverride !== undefined && globalCagrOverride !== '')
-        ? Number(globalCagrOverride) / 100
-        : Number(a.cagr || 7) / 100;
-      balances[a.id] = Math.max(0, balances[a.id] || 0) * (1 + cagr);
+      const cagr = (globalCagrOverride !== null && globalCagrOverride !== undefined && globalCagrOverride !== '') ? Number(globalCagrOverride) / 100 : Number(a.cagr || 7) / 100;
+      balances[a.id] = Math.max(0, (balances[a.id] || 0) * (1 + cagr));
     });
     properties.forEach(p => {
       const rate = Number(p.appreciationRate || 3) / 100;
-      propValues[p.id] = Math.max(0, propValues[p.id] || 0) * (1 + rate);
+      propValues[p.id] = Math.max(0, (propValues[p.id] || 0) * (1 + rate));
     });
   }
 
-  return results;
+  // Sustainability Check (Backward pass)
+  const isSustainable = new Array(simYears).fill(false);
+  for (let i = simYears - 1; i >= 0; i--) {
+    const meet = rawResults[i].freedomTarget > 0 && rawResults[i].postTaxWithdrawal >= rawResults[i].freedomTarget;
+    if (i === simYears - 1) {
+      isSustainable[i] = meet;
+    } else {
+      isSustainable[i] = meet && isSustainable[i+1];
+    }
+  }
+
+  return rawResults.map((r, i) => ({ ...r, isFreedom: isSustainable[i] && (i === 0 || !isSustainable[i-1]) })).slice(0, projectionYears);
 }
 
 export function findFreedomDate(simulation) {
