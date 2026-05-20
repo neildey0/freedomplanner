@@ -210,11 +210,15 @@ export function runSimulation(state) {
 
     rawResults.push({
       year, myAge: currMyAge, spouseAge: currSpouseAge,
-      meNetWorth: meNW, meChangePct, spouseNetWorth: spNW, spChangePct,
-      netWorth: combNW, liquidAssets: combLiquid, postTaxWithdrawal, freedomTarget,
-      totalExpenses: yearExpenses, nwChangePct, crashApplied, crashPercent: crashPercentApplied,
+      meNetWorth: meNW, meChangePct, meInvestments: meInv, mePropertyValue: mePropTotal,
+      spouseNetWorth: spNW, spChangePct, spouseInvestments: spInv, spousePropertyValue: spPropTotal,
+      netWorth: combNW, liquidAssets: combLiquid, postTaxWithdrawal, postTaxSwr4: postTaxWithdrawal, freedomTarget,
+      totalExpenses: yearExpenses, recurringExpenses: yearRecurring, oneTimeExpenses: yearOneTime, unexpectedExpenses: yearUnexpected,
+      nwChangePct, crashApplied, crashPercent: crashPercentApplied,
       taxableBalance: meData.taxable + spData.taxable, deferredBalance: meData.deferred + spData.deferred, rothBalance: meData.roth + spData.roth,
       realNetWorth: combNW / inflationFactor,
+      accountBalances: { ...balances },
+      propertyValues:  { ...propValues },
     });
 
     // 7. Apply CAGR for next year

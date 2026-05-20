@@ -168,7 +168,7 @@ export default function Dashboard() {
 
       {/* Tax Bucket Analysis */}
       <div className="card">
-        <h3 className="font-semibold text-gray-200 mb-3 text-sm">Tax Bucket Analysis — {myName}{hasSpouseAssets ? ` + ${spouseName}` : ''}</h3>
+        <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-3 text-sm">Tax Bucket Analysis — {myName}{hasSpouseAssets ? ` + ${spouseName}` : ''}</h3>
         <div className="space-y-3">
           {[
             { label: 'Brokerage (Taxable)',  value: myTaxable + spTaxable,   pct: totalNetWorth > 0 ? (myTaxable + spTaxable) / totalNetWorth : 0,   color: 'bg-amber-400',  tax: '15% Cap Gains', taxAmt: (myTaxable + spTaxable) * 0.15 },

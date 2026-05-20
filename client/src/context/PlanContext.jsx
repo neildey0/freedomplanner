@@ -4,6 +4,14 @@ import { saveToStorage, loadFromStorage } from '../utils/storage';
 
 const PlanContext = createContext();
 
+function makeDefaultCrashes(currentYear = new Date().getFullYear(), count = 10) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `dc${i + 1}`,
+    year: currentYear + 5 * (i + 1),
+    percent: 30,
+  }));
+}
+
 const DEFAULT_STATE = {
   accounts:   [],
   expenses:   [],
@@ -12,6 +20,8 @@ const DEFAULT_STATE = {
   settings: {
     inflation:              3,
     globalCagrOverride:     null,
+    crashes:                makeDefaultCrashes(),
+    unexpectedExpenses:     [],
     crashYear:              null,
     crashPercent:           30,
     projectionYears:        30,
@@ -37,26 +47,17 @@ const BLANK_STATE = {
   settings: {
     inflation:              3,
     globalCagrOverride:     null,
-    crashes: [
-      { id: 'c1', year: 2031, percent: 30 },
-      { id: 'c2', year: 2036, percent: 30 },
-      { id: 'c3', year: 2041, percent: 30 },
-      { id: 'c4', year: 2046, percent: 30 },
-      { id: 'c5', year: 2051, percent: 30 },
-      { id: 'c6', year: 2056, percent: 30 },
-      { id: 'c7', year: 2061, percent: 30 },
-      { id: 'c8', year: 2066, percent: 30 },
-    ],
-    myAge:      30,
-    spouseAge:  30,
-    withdrawalRate: 4,
-    unexpectedExpenses: [],
-    projectionYears:      60,
-    currentYear:          new Date().getFullYear(),
-    myAnnualSavings:      0,
-    spouseAnnualSavings:  0,
-    savingsSplit:         60,
-    spouseSavingsSplit:   60,
+    crashes:                makeDefaultCrashes(),
+    myAge:                  30,
+    spouseAge:              30,
+    withdrawalRate:         4,
+    unexpectedExpenses:     [],
+    projectionYears:        60,
+    currentYear:            new Date().getFullYear(),
+    myAnnualSavings:        0,
+    spouseAnnualSavings:    0,
+    savingsSplit:           60,
+    spouseSavingsSplit:     60,
     targetRetirementIncome: 0,
     myName:     'Me',
     spouseName: 'Spouse',

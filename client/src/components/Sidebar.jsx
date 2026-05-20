@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SlidersHorizontal, TrendingUp, Zap, AlertTriangle, PiggyBank, Target, Users, X, Briefcase } from 'lucide-react';
+import { SlidersHorizontal, TrendingUp, Zap, AlertTriangle, PiggyBank, Target, Users, X, Briefcase, DollarSign } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { findFreedomDate } from '../utils/mathEngine';
 
@@ -192,40 +192,117 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
         )}
       </div>
 
-      {/* Market Crash SORR */}
+      {/* Market Crashes (SORR) */}
       <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wide">
-            <AlertTriangle size={13} /> Market Crash (SORR)
+            <AlertTriangle size={13} /> Market Crashes (SORR)
           </div>
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input type="checkbox"
-              checked={settings.crashYear !== null && settings.crashYear !== undefined}
-              onChange={e => set('crashYear', e.target.checked ? settings.currentYear + 5 : null)}
-              className="rounded" />
-            <span className="text-xs text-gray-500">Enable</span>
-          </label>
+          <button
+            onClick={() => {
+              const crashes = [...(settings.crashes || [])];
+              crashes.push({ id: `c${Date.now()}`, year: settings.currentYear + 5 + crashes.length * 5, percent: 30 });
+              set('crashes', crashes);
+            }}
+            className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 font-medium"
+          >
+            + Add
+          </button>
         </div>
-        {settings.crashYear !== null && settings.crashYear !== undefined && (
-          <>
-            <div className="mb-3">
-              <label className="label">Crash Year</label>
-              <input type="number" className="input"
-                value={settings.crashYear}
-                min={settings.currentYear}
-                max={settings.currentYear + settings.projectionYears}
-                onChange={e => set('crashYear', Number(e.target.value))} />
-            </div>
-            <label className="label">Crash Magnitude: -{settings.crashPercent}%</label>
-            <input type="range" min={10} max={60} step={5}
-              value={settings.crashPercent}
-              onChange={e => set('crashPercent', Number(e.target.value))}
-              className="w-full accent-orange-500" />
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>-10% (Mild)</span><span>-60% (Severe)</span>
-            </div>
-          </>
+        {(settings.crashes || []).length === 0 && (
+          <p className="text-xs text-gray-400">No crashes simulated. Add one to test SORR.</p>
         )}
+        <div className="space-y-3">
+          {(settings.crashes || []).map((crash, idx) => (
+            <div key={crash.id} className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-orange-700 dark:text-orange-400">Crash {idx + 1}</span>
+                <button
+                  onClick={() => set('crashes', (settings.crashes || []).filter(c => c.id !== crash.id))}
+                  className="text-xs text-red-500 hover:text-red-700 dark:text-red-400"
+                >✕</button>
+              </div>
+              <label className="label">Year</label>
+              <input type="number" className="input mb-2"
+                value={crash.year}
+                min={settings.currentYear}
+                max={settings.currentYear + (settings.projectionYears || 60)}
+                onChange={e => set('crashes', (settings.crashes || []).map(c =>
+                  c.id === crash.id ? { ...c, year: Number(e.target.value) } : c
+                ))} />
+              <label className="label">Drop: -{crash.percent}%</label>
+              <input type="range" min={5} max={70} step={5}
+                value={crash.percent}
+                onChange={e => set('crashes', (settings.crashes || []).map(c =>
+                  c.id === crash.id ? { ...c, percent: Number(e.target.value) } : c
+                ))}
+                className="w-full accent-orange-500" />
+              <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+                <span>-5% (Minor)</span><span>-70% (Severe)</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Major Purchases */}
+      <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide">
+            <DollarSign size={13} /> Major Purchases
+          </div>
+          <button
+            onClick={() => {
+              const purchases = [...(settings.unexpectedExpenses || [])];
+              purchases.push({ id: `p${Date.now()}`, name: 'Purchase', year: settings.currentYear + 3, amount: 50000 });
+              set('unexpectedExpenses', purchases);
+            }}
+            className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 font-medium"
+          >
+            + Add
+          </button>
+        </div>
+        {(settings.unexpectedExpenses || []).length === 0 && (
+          <p className="text-xs text-gray-400">No major purchases. Add one to deduct from liquid assets.</p>
+        )}
+        <div className="space-y-3">
+          {(settings.unexpectedExpenses || []).map((p, idx) => (
+            <div key={p.id} className="bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-purple-700 dark:text-purple-400">Purchase {idx + 1}</span>
+                <button
+                  onClick={() => set('unexpectedExpenses', (settings.unexpectedExpenses || []).filter(x => x.id !== p.id))}
+                  className="text-xs text-red-500 hover:text-red-700 dark:text-red-400"
+                >✕</button>
+              </div>
+              <label className="label">Name</label>
+              <input type="text" className="input mb-2" value={p.name || ''}
+                onChange={e => set('unexpectedExpenses', (settings.unexpectedExpenses || []).map(x =>
+                  x.id === p.id ? { ...x, name: e.target.value } : x
+                ))} />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="label">Year</label>
+                  <input type="number" className="input"
+                    value={p.year}
+                    min={settings.currentYear}
+                    max={settings.currentYear + (settings.projectionYears || 60)}
+                    onChange={e => set('unexpectedExpenses', (settings.unexpectedExpenses || []).map(x =>
+                      x.id === p.id ? { ...x, year: Number(e.target.value) } : x
+                    ))} />
+                </div>
+                <div>
+                  <label className="label">Amount ($)</label>
+                  <input type="number" className="input" min={0} step={10000}
+                    value={p.amount}
+                    onChange={e => set('unexpectedExpenses', (settings.unexpectedExpenses || []).map(x =>
+                      x.id === p.id ? { ...x, amount: Number(e.target.value) } : x
+                    ))} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Projection Horizon */}
