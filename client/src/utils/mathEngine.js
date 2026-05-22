@@ -10,11 +10,75 @@ export function fmtFull(n) {
   return '$' + Math.round(n).toLocaleString('en-US');
 }
 
-// Add savings to an owner's deferred and taxable accounts proportionally.
+// ── 2024 Federal Tax Brackets ─────────────────────────────────────────────────
+const TAX_MFJ = [
+  { min: 0,       max: 23200,    rate: 0.10 },
+  { min: 23200,   max: 94300,    rate: 0.12 },
+  { min: 94300,   max: 201050,   rate: 0.22 },
+  { min: 201050,  max: 383900,   rate: 0.24 },
+  { min: 383900,  max: 487450,   rate: 0.32 },
+  { min: 487450,  max: 731200,   rate: 0.35 },
+  { min: 731200,  max: Infinity, rate: 0.37 },
+];
+const TAX_SINGLE = [
+  { min: 0,       max: 11600,    rate: 0.10 },
+  { min: 11600,   max: 47150,    rate: 0.12 },
+  { min: 47150,   max: 100525,   rate: 0.22 },
+  { min: 100525,  max: 191950,   rate: 0.24 },
+  { min: 191950,  max: 243725,   rate: 0.32 },
+  { min: 243725,  max: 609350,   rate: 0.35 },
+  { min: 609350,  max: Infinity, rate: 0.37 },
+];
+const STD_DEDUCTION = { mfj: 29200, single: 14600 };
+const LTCG_MFJ    = [{ max: 94050,  rate: 0 }, { max: 583750, rate: 0.15 }, { max: Infinity, rate: 0.20 }];
+const LTCG_SINGLE = [{ max: 47025,  rate: 0 }, { max: 518900, rate: 0.15 }, { max: Infinity, rate: 0.20 }];
+
+function ordinaryTax(income, status) {
+  const deduction = STD_DEDUCTION[status] || STD_DEDUCTION.mfj;
+  const taxable   = Math.max(0, income - deduction);
+  const brackets  = status === 'single' ? TAX_SINGLE : TAX_MFJ;
+  let tax = 0;
+  for (const b of brackets) {
+    if (taxable <= b.min) break;
+    tax += (Math.min(taxable, b.max) - b.min) * b.rate;
+  }
+  return tax;
+}
+
+function ltcgTax(gains, ordinaryGross, status) {
+  const deduction      = STD_DEDUCTION[status] || STD_DEDUCTION.mfj;
+  const taxableOrdinary = Math.max(0, ordinaryGross - deduction);
+  const brackets       = status === 'single' ? LTCG_SINGLE : LTCG_MFJ;
+  let tax = 0, remaining = gains, base = taxableOrdinary;
+  for (const b of brackets) {
+    if (remaining <= 0) break;
+    const room  = Math.max(0, b.max - base);
+    const chunk = Math.min(remaining, room);
+    tax += chunk * b.rate;
+    remaining -= chunk;
+    base      += chunk;
+  }
+  return tax;
+}
+
+// Computes federal + state tax on a gross portfolio withdrawal split across buckets.
+// Roth = 0 tax, taxable = LTCG, deferred = ordinary income.
+export function calcAnnualTax(gross, rothAmt, taxableAmt, deferredAmt, filingStatus = 'mfj', stateTaxPct = 0) {
+  const total = rothAmt + taxableAmt + deferredAmt;
+  if (total <= 0 || gross <= 0) return 0;
+  const deferredPortion = gross * (deferredAmt / total);
+  const taxablePortion  = gross * (taxableAmt  / total);
+  const fedOrdinary = ordinaryTax(deferredPortion, filingStatus);
+  const fedLTCG     = ltcgTax(taxablePortion, deferredPortion, filingStatus);
+  const stateTax    = (deferredPortion + taxablePortion) * (Number(stateTaxPct || 0) / 100);
+  return fedOrdinary + fedLTCG + stateTax;
+}
+
+// ── Savings/Income/Expense helpers ────────────────────────────────────────────
 function addSavingsToOwner(accounts, balances, owner, totalSavings, deferredPct) {
   if (!(totalSavings > 0)) return;
   const dPct = Number(deferredPct || 60) / 100;
-  const deferredAccts = accounts.filter(a => a.type === 'deferred' && (a.owner || 'me') === owner);
+  const deferredAccts = accounts.filter(a => a.type === 'deferred'  && (a.owner || 'me') === owner);
   const taxableAccts  = accounts.filter(a => a.type === 'brokerage' && (a.owner || 'me') === owner);
   const anyAccts = [...deferredAccts, ...taxableAccts];
   if (anyAccts.length === 0) return;
@@ -25,20 +89,16 @@ function addSavingsToOwner(accounts, balances, owner, totalSavings, deferredPct)
   if (deferredAccts.length > 0) {
     const per = deferredAmt / deferredAccts.length;
     deferredAccts.forEach(a => { balances[a.id] = (balances[a.id] || 0) + per; });
-  } else {
-    if (taxableAccts.length > 0) {
-      const per = deferredAmt / taxableAccts.length;
-      taxableAccts.forEach(a => { balances[a.id] = (balances[a.id] || 0) + per; });
-    }
+  } else if (taxableAccts.length > 0) {
+    const per = deferredAmt / taxableAccts.length;
+    taxableAccts.forEach(a => { balances[a.id] = (balances[a.id] || 0) + per; });
   }
   if (taxableAccts.length > 0) {
     const per = taxableAmt / taxableAccts.length;
     taxableAccts.forEach(a => { balances[a.id] = (balances[a.id] || 0) + per; });
-  } else {
-    if (deferredAccts.length > 0) {
-      const per = taxableAmt / deferredAccts.length;
-      deferredAccts.forEach(a => { balances[a.id] = (balances[a.id] || 0) + per; });
-    }
+  } else if (deferredAccts.length > 0) {
+    const per = taxableAmt / deferredAccts.length;
+    deferredAccts.forEach(a => { balances[a.id] = (balances[a.id] || 0) + per; });
   }
 }
 
@@ -65,30 +125,47 @@ function deductExpense(accounts, balances, amount) {
   }
 }
 
+// ── Main simulation ───────────────────────────────────────────────────────────
 export function runSimulation(state) {
   const { accounts = [], expenses = [], rsus = [], properties = [], settings = {} } = state;
   const {
-    inflation        = 3,
+    inflation               = 3,
     globalCagrOverride,
-    crashes          = [],
-    projectionYears  = 60,
-    currentYear      = new Date().getFullYear(),
-    myAnnualSavings  = 0,
-    spouseAnnualSavings = 0,
-    savingsSplit        = 60,
-    spouseSavingsSplit  = 60,
-    targetRetirementIncome = 0,
-    myName     = 'Neil',
-    spouseName = 'Radhika',
-    myAge      = 30,
-    spouseAge  = 30,
-    withdrawalRate = 4,
-    unexpectedExpenses = [],
+    crashes                 = [],
+    projectionYears         = 60,
+    currentYear             = new Date().getFullYear(),
+    myAnnualSavings         = 0,
+    spouseAnnualSavings     = 0,
+    savingsSplit            = 60,
+    spouseSavingsSplit      = 60,
+    targetRetirementIncome  = 0,
+    myName                  = 'Neil',
+    spouseName              = 'Radhika',
+    myAge                   = 30,
+    spouseAge               = 30,
+    withdrawalRate          = 4,
+    unexpectedExpenses      = [],
+    // Feature 3: Real tax brackets
+    filingStatus            = 'mfj',
+    stateTaxRate            = 0,
+    // Feature 4: Healthcare gap
+    healthcareEnabled       = false,
+    preMedicareCostPerPerson  = 12000,
+    postMedicareCostPerPerson = 5000,
+    myMedicareAge           = 65,
+    spouseMedicareAge       = 65,
+    // Feature 6: Glide path
+    glidePathEnabled        = false,
+    stockPctNow             = 90,
+    stockPctAtRetirement    = 60,
+    bondCagr: bondCagrPct   = 4,
+    glideEndAge             = 65,
   } = settings;
 
-  const wRate = Number(withdrawalRate || 4) / 100;
+  const wRate      = Number(withdrawalRate || 4) / 100;
+  const isCouple   = filingStatus !== 'single';
   const yearsTo120 = 120 - Math.min(Number(myAge), Number(spouseAge));
-  const simYears = Math.max(projectionYears, yearsTo120);
+  const simYears   = Math.max(Number(projectionYears || 60), yearsTo120);
 
   const balances = {};
   accounts.forEach(a => { balances[a.id] = Math.max(0, Number(a.balance || 0)); });
@@ -102,10 +179,10 @@ export function runSimulation(state) {
   const rawResults = [];
 
   for (let i = 0; i < simYears; i++) {
-    const year          = currentYear + i;
+    const year            = currentYear + i;
     const inflationFactor = Math.pow(1 + inflation / 100, i);
-    const currMyAge     = Number(myAge) + i;
-    const currSpouseAge  = Number(spouseAge) + i;
+    const currMyAge       = Number(myAge) + i;
+    const currSpouseAge   = Number(spouseAge) + i;
 
     // 1. RSU vests
     const yearRsus = rsus.filter(r => {
@@ -117,26 +194,26 @@ export function runSimulation(state) {
       if ((r.owner || 'me') === 'spouse') spouseRsuIncome += val;
       else meRsuIncome += val;
     });
-    addIncomeToOwner(accounts, balances, 'me', meRsuIncome);
+    addIncomeToOwner(accounts, balances, 'me',     meRsuIncome);
     addIncomeToOwner(accounts, balances, 'spouse', spouseRsuIncome);
 
     // 2. Savings
-    addSavingsToOwner(accounts, balances, 'me',     myAnnualSavings, savingsSplit);
+    addSavingsToOwner(accounts, balances, 'me',     myAnnualSavings,     savingsSplit);
     addSavingsToOwner(accounts, balances, 'spouse', spouseAnnualSavings, spouseSavingsSplit);
 
-    // 3. Rental Net
+    // 3. Rental net income
     let meRentalNet = 0, spouseRentalNet = 0;
     properties.forEach(p => {
       const net   = (Number(p.annualRent || 0) - Number(p.annualExpenses || 0)) * inflationFactor;
       const owner = p.owner || 'me';
-      if (owner === 'joint')  { meRentalNet += net / 2; spouseRentalNet += net / 2; }
-      else if (owner === 'spouse') spouseRentalNet += net;
-      else meRentalNet += net;
+      if (owner === 'joint')        { meRentalNet += net / 2; spouseRentalNet += net / 2; }
+      else if (owner === 'spouse')  spouseRentalNet += net;
+      else                          meRentalNet += net;
     });
     addIncomeToOwner(accounts, balances, 'me',     meRentalNet);
     addIncomeToOwner(accounts, balances, 'spouse', spouseRentalNet);
 
-    // 4. Expenses
+    // 4. Expenses (recurring + one-time + unexpected)
     let yearExpenses = 0, yearRecurring = 0, yearOneTime = 0, yearUnexpected = 0;
     expenses.forEach(exp => {
       const baseAmount = Number(exp.amount || 0);
@@ -155,11 +232,27 @@ export function runSimulation(state) {
         yearUnexpected += amt; yearExpenses += amt;
       }
     });
-    if (yearOneTime > 0 || yearUnexpected > 0) deductExpense(accounts, balances, yearOneTime + yearUnexpected);
 
-    // 5. Crashes
-    let crashApplied = false;
-    let crashPercentApplied = 0;
+    // Healthcare gap cost (Feature 4) — added to recurring for display + freedom target
+    let healthcareCostYear = 0;
+    if (healthcareEnabled) {
+      const preCost  = Number(preMedicareCostPerPerson  || 12000);
+      const postCost = Number(postMedicareCostPerPerson || 5000);
+      healthcareCostYear += (currMyAge < Number(myMedicareAge || 65)) ? preCost : postCost;
+      if (isCouple) {
+        healthcareCostYear += (currSpouseAge < Number(spouseMedicareAge || 65)) ? preCost : postCost;
+      }
+      healthcareCostYear *= inflationFactor;
+      yearRecurring += healthcareCostYear;
+      yearExpenses  += healthcareCostYear;
+    }
+
+    if (yearOneTime > 0 || yearUnexpected > 0) {
+      deductExpense(accounts, balances, yearOneTime + yearUnexpected);
+    }
+
+    // 5. Market crashes
+    let crashApplied = false, crashPercentApplied = 0;
     const yearCrashes = (crashes || []).filter(c => Number(c.year) === year);
     if (yearCrashes.length > 0) {
       yearCrashes.forEach(c => {
@@ -171,60 +264,106 @@ export function runSimulation(state) {
       crashApplied = true;
     }
 
-    // 6. Aggregate
-    const ob = { me: { taxable: 0, deferred: 0, roth: 0 }, spouse: { taxable: 0, deferred: 0, roth: 0 }, joint: { taxable: 0, deferred: 0, roth: 0 } };
+    // 6. Aggregate per owner + real tax bracket calc (Feature 3)
+    const ob = {
+      me:     { taxable: 0, deferred: 0, roth: 0 },
+      spouse: { taxable: 0, deferred: 0, roth: 0 },
+      joint:  { taxable: 0, deferred: 0, roth: 0 },
+    };
     accounts.forEach(a => {
-      const owner = a.owner || 'me';
+      const owner   = a.owner || 'me';
       const typeKey = a.type === 'brokerage' ? 'taxable' : a.type === 'deferred' ? 'deferred' : 'roth';
       ob[owner][typeKey] += (balances[a.id] || 0);
     });
-    const meData = { taxable: ob.me.taxable + ob.joint.taxable/2, deferred: ob.me.deferred + ob.joint.deferred/2, roth: ob.me.roth + ob.joint.roth/2 };
-    const spData = { taxable: ob.spouse.taxable + ob.joint.taxable/2, deferred: ob.spouse.deferred + ob.joint.deferred/2, roth: ob.spouse.roth + ob.joint.roth/2 };
+
+    const meData = {
+      taxable:  ob.me.taxable  + ob.joint.taxable  / 2,
+      deferred: ob.me.deferred + ob.joint.deferred / 2,
+      roth:     ob.me.roth     + ob.joint.roth     / 2,
+    };
+    const spData = {
+      taxable:  ob.spouse.taxable  + ob.joint.taxable  / 2,
+      deferred: ob.spouse.deferred + ob.joint.deferred / 2,
+      roth:     ob.spouse.roth     + ob.joint.roth     / 2,
+    };
+
     let mePropTotal = 0, spPropTotal = 0;
     properties.forEach(p => {
-      const val = propValues[p.id] || 0;
+      const val   = propValues[p.id] || 0;
       const owner = p.owner || 'me';
-      if (owner === 'me') mePropTotal += val;
+      if (owner === 'me')         mePropTotal += val;
       else if (owner === 'spouse') spPropTotal += val;
-      else { mePropTotal += val/2; spPropTotal += val/2; }
+      else { mePropTotal += val / 2; spPropTotal += val / 2; }
     });
 
     const meInv = meData.taxable + meData.deferred + meData.roth;
     const spInv = spData.taxable + spData.deferred + spData.roth;
-    const meNW = meInv + mePropTotal;
-    const spNW = spInv + spPropTotal;
-    const combNW = meNW + spNW;
+    const meNW  = meInv + mePropTotal;
+    const spNW  = spInv + spPropTotal;
+    const combNW     = meNW + spNW;
     const combLiquid = meInv + spInv;
-    const mePostTax = meData.roth + meData.taxable * 0.85 + meData.deferred * 0.80;
-    const spPostTax = spData.roth + spData.taxable * 0.85 + spData.deferred * 0.80;
-    const combPostTax = mePostTax + spPostTax;
-    const postTaxWithdrawal = combPostTax * wRate;
+
+    // Real tax brackets: compute after-tax capacity from gross 4% SWR withdrawal
+    const totalRoth     = meData.roth     + spData.roth;
+    const totalTaxable  = meData.taxable  + spData.taxable;
+    const totalDeferred = meData.deferred + spData.deferred;
+    const grossWithdrawal  = combLiquid * wRate;
+    const annualTax        = calcAnnualTax(grossWithdrawal, totalRoth, totalTaxable, totalDeferred, filingStatus, stateTaxRate);
+    const postTaxWithdrawal = Math.max(0, grossWithdrawal - annualTax);
+    const effectiveTaxRate  = grossWithdrawal > 0 ? annualTax / grossWithdrawal : 0;
 
     const prev = rawResults.length > 0 ? rawResults[rawResults.length - 1] : null;
     const meChangePct = prev && prev.meNetWorth > 0 ? ((meNW - prev.meNetWorth) / prev.meNetWorth) * 100 : 0;
     const spChangePct = prev && prev.spouseNetWorth > 0 ? ((spNW - prev.spouseNetWorth) / prev.spouseNetWorth) * 100 : 0;
     const nwChangePct = prev && prev.netWorth > 0 ? ((combNW - prev.netWorth) / prev.netWorth) * 100 : 0;
 
-    const freedomBase = baseRecurringTotal > 0 ? baseRecurringTotal : Number(targetRetirementIncome || 0);
-    const freedomTarget = freedomBase > 0 ? freedomBase * inflationFactor : 0;
+    // Freedom target includes healthcare (Feature 4)
+    const baseExpenseTarget = baseRecurringTotal > 0 ? baseRecurringTotal : Number(targetRetirementIncome || 0);
+    const freedomTarget = (baseExpenseTarget > 0 || (healthcareEnabled && healthcareCostYear > 0))
+      ? baseExpenseTarget * inflationFactor + healthcareCostYear
+      : 0;
 
     rawResults.push({
       year, myAge: currMyAge, spouseAge: currSpouseAge,
       meNetWorth: meNW, meChangePct, meInvestments: meInv, mePropertyValue: mePropTotal,
       spouseNetWorth: spNW, spChangePct, spouseInvestments: spInv, spousePropertyValue: spPropTotal,
-      netWorth: combNW, liquidAssets: combLiquid, postTaxWithdrawal, postTaxSwr4: postTaxWithdrawal, freedomTarget,
-      totalExpenses: yearExpenses, recurringExpenses: yearRecurring, oneTimeExpenses: yearOneTime, unexpectedExpenses: yearUnexpected,
+      netWorth: combNW, liquidAssets: combLiquid,
+      postTaxWithdrawal, postTaxSwr4: postTaxWithdrawal,
+      annualTax, effectiveTaxRate,
+      freedomTarget,
+      totalExpenses: yearExpenses, recurringExpenses: yearRecurring,
+      oneTimeExpenses: yearOneTime, unexpectedExpenses: yearUnexpected,
+      healthcareCostYear,
       nwChangePct, crashApplied, crashPercent: crashPercentApplied,
-      taxableBalance: meData.taxable + spData.taxable, deferredBalance: meData.deferred + spData.deferred, rothBalance: meData.roth + spData.roth,
+      taxableBalance: totalTaxable, deferredBalance: totalDeferred, rothBalance: totalRoth,
       realNetWorth: combNW / inflationFactor,
       accountBalances: { ...balances },
       propertyValues:  { ...propValues },
     });
 
-    // 7. Apply CAGR for next year
+    // 7. Apply CAGR (with glide path, Feature 6)
+    const bondRate     = Number(bondCagrPct || 4) / 100;
+    const currAgeGlide = Number(myAge) + i;
+    let stockPct = 1;
+    if (glidePathEnabled) {
+      const glideStart = Number(myAge);
+      const glideEnd   = Number(glideEndAge || 65);
+      if (currAgeGlide >= glideEnd || glideEnd <= glideStart) {
+        stockPct = Number(stockPctAtRetirement || 60) / 100;
+      } else {
+        const t = Math.max(0, Math.min(1, (currAgeGlide - glideStart) / (glideEnd - glideStart)));
+        stockPct = (Number(stockPctNow || 90) / 100) + t * ((Number(stockPctAtRetirement || 60) / 100) - (Number(stockPctNow || 90) / 100));
+      }
+    }
+
     accounts.forEach(a => {
-      const cagr = (globalCagrOverride !== null && globalCagrOverride !== undefined && globalCagrOverride !== '') ? Number(globalCagrOverride) / 100 : Number(a.cagr || 7) / 100;
-      balances[a.id] = Math.max(0, (balances[a.id] || 0) * (1 + cagr));
+      const rawCagr = (globalCagrOverride !== null && globalCagrOverride !== undefined && globalCagrOverride !== '')
+        ? Number(globalCagrOverride) / 100
+        : Number(a.cagr || 7) / 100;
+      const effectiveCagr = glidePathEnabled
+        ? stockPct * rawCagr + (1 - stockPct) * bondRate
+        : rawCagr;
+      balances[a.id] = Math.max(0, (balances[a.id] || 0) * (1 + effectiveCagr));
     });
     properties.forEach(p => {
       const rate = Number(p.appreciationRate || 3) / 100;
@@ -232,18 +371,16 @@ export function runSimulation(state) {
     });
   }
 
-  // Sustainability Check (Backward pass)
+  // Backward-pass sustainability check
   const isSustainable = new Array(simYears).fill(false);
   for (let i = simYears - 1; i >= 0; i--) {
     const meet = rawResults[i].freedomTarget > 0 && rawResults[i].postTaxWithdrawal >= rawResults[i].freedomTarget;
-    if (i === simYears - 1) {
-      isSustainable[i] = meet;
-    } else {
-      isSustainable[i] = meet && isSustainable[i+1];
-    }
+    isSustainable[i] = i === simYears - 1 ? meet : meet && isSustainable[i + 1];
   }
 
-  return rawResults.map((r, i) => ({ ...r, isFreedom: isSustainable[i] && (i === 0 || !isSustainable[i-1]) })).slice(0, projectionYears);
+  return rawResults
+    .map((r, i) => ({ ...r, isFreedom: isSustainable[i] && (i === 0 || !isSustainable[i - 1]) }))
+    .slice(0, Number(projectionYears || 60));
 }
 
 export function findFreedomDate(simulation) {

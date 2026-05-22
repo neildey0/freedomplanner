@@ -1,5 +1,5 @@
-import React from 'react';
-import { DollarSign, Calendar, Target, Wallet, PiggyBank, Home } from 'lucide-react';
+import React, { useState } from 'react';
+import { DollarSign, Calendar, Target, Wallet, PiggyBank, Home, PlayCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { findFreedomDate, fmtFull } from '../utils/mathEngine';
 import WealthChart from './WealthChart';
@@ -107,8 +107,65 @@ export default function Dashboard() {
 
   const hasSpouseAssets = spouseInvestments > 0 || spouseProperties > 0;
 
+  const [videoOpen, setVideoOpen] = useState(true);
+
   return (
     <div className="space-y-6">
+
+      {/* ── What is F**K YOU Money? ──────────────────────────────────────── */}
+      <div className="rounded-2xl overflow-hidden border border-gray-800 bg-gray-950 shadow-xl">
+        {/* Header row — always visible */}
+        <button
+          onClick={() => setVideoOpen(v => !v)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-900 transition-colors group"
+        >
+          <div className="flex items-center gap-3">
+            <PlayCircle size={28} className="text-amber-400 flex-shrink-0" />
+            <div className="text-left">
+              <p className="text-[11px] text-gray-500 uppercase tracking-widest font-semibold">The Philosophy Behind This Tool</p>
+              <h2 className="text-xl font-black text-amber-400 leading-tight">
+                What is F**K YOU Money?
+              </h2>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 group-hover:text-gray-300 transition-colors hidden sm:block italic">
+              2 min clip · The Gambler (2014)
+            </span>
+            {videoOpen
+              ? <ChevronUp size={18} className="text-amber-400" />
+              : <ChevronDown size={18} className="text-amber-400" />
+            }
+          </div>
+        </button>
+
+        {/* Pull quote — always visible */}
+        <div className="px-5 pb-4 border-t border-gray-800 pt-3">
+          <blockquote className="text-gray-300 text-sm italic leading-relaxed border-l-2 border-amber-500 pl-4">
+            "You get up two million dollars, any asshole in the world knows what to do: you get a house with a 25-year roof, an indestructible Jap economy shitbox, you put the rest into the market at 3 to 5 percent to pay your taxes and that's it… that is F**K YOU Money."
+          </blockquote>
+          <p className="text-xs text-gray-600 mt-2 pl-4">— John Goodman as Frank, <em>The Gambler</em> (2014)</p>
+        </div>
+
+        {/* Collapsible YouTube embed */}
+        {videoOpen && (
+          <div className="px-5 pb-5">
+            <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ paddingTop: '56.25%' }}>
+              <iframe
+                className="absolute inset-0 w-full h-full"
+                src="https://www.youtube.com/embed/sPjNFp0diWE?autoplay=1&rel=0"
+                title="F**K YOU Money — The Gambler"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+            <p className="text-xs text-gray-600 text-center mt-2">
+              This 2-minute scene is the entire philosophy of this tool. Watch it first.
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Freedom Date Hero */}
       {freedomYear ? (
         <div className="bg-gradient-to-r from-amber-600 to-yellow-500 rounded-2xl p-6 text-gray-950 shadow-lg">

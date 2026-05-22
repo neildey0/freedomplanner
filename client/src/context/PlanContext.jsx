@@ -12,11 +12,30 @@ function makeDefaultCrashes(currentYear = new Date().getFullYear(), count = 10) 
   }));
 }
 
+const NEW_SETTINGS = {
+  // Feature 3: Tax brackets
+  filingStatus:               'mfj',
+  stateTaxRate:               0,
+  // Feature 4: Healthcare gap
+  healthcareEnabled:          false,
+  preMedicareCostPerPerson:   12000,
+  postMedicareCostPerPerson:  5000,
+  myMedicareAge:              65,
+  spouseMedicareAge:          65,
+  // Feature 6: Glide path
+  glidePathEnabled:           false,
+  stockPctNow:                90,
+  stockPctAtRetirement:       60,
+  bondCagr:                   4,
+  glideEndAge:                65,
+};
+
 const DEFAULT_STATE = {
   accounts:   [],
   expenses:   [],
   rsus:       [],
   properties: [],
+  scenarios:  [],
   settings: {
     inflation:              3,
     globalCagrOverride:     null,
@@ -34,16 +53,18 @@ const DEFAULT_STATE = {
     retirementYear:         null,
     myName:     '',
     spouseName: '',
+    ...NEW_SETTINGS,
   },
   darkMode:   false,
   simulation: [],
 };
 
 const BLANK_STATE = {
-  accounts: [],
-  expenses: [],
+  accounts:   [],
+  expenses:   [],
   rsus:       [],
   properties: [],
+  scenarios:  [],
   settings: {
     inflation:              3,
     globalCagrOverride:     null,
@@ -61,6 +82,7 @@ const BLANK_STATE = {
     targetRetirementIncome: 0,
     myName:     'Me',
     spouseName: 'Spouse',
+    ...NEW_SETTINGS,
   },
   darkMode:   false,
   simulation: [],
